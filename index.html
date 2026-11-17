@@ -17,16 +17,44 @@
     }
   }
   </script>
+  <script>
+    // Affiche les erreurs sous le bouton JOUER (pratique pour déboguer sans la console)
+    window.showGameError = function (msg) {
+      var el = document.getElementById('assetStatus');
+      if (!el) return;
+      el.textContent = '⚠️ Erreur : ' + msg;
+      el.style.color = '#ff8a8a';
+      el.style.opacity = '1';
+    };
+    window.addEventListener('error', function (e) {
+      var f = e.filename || '';
+      if (/^(chrome|moz|safari|safari-web)-extension:/.test(f)) return; // erreurs des extensions du navigateur
+      window.showGameError((e.message || 'inconnue') + (f ? ' (' + f.split('/').pop() + ':' + e.lineno + ')' : ''));
+    });
+  </script>
 </head>
 <body>
   <div id="game"></div>
 
   <!-- ===== HUD (pendant le jeu) ===== -->
   <div id="hud" class="hidden">
+    <div id="hurtFlash"></div>
+
     <div id="topLeft">
       <div class="panel"><span class="label">💰 ARGENT</span><span id="money">0 $</span></div>
       <div class="panel"><span class="label">🪙 PIÈCES</span><span id="coins">0/40</span></div>
       <div class="panel"><span class="label">🏆 RECORD DRIFT</span><span id="bestDrift">0</span></div>
+    </div>
+
+    <!-- vie du héros, état de la voiture, arme -->
+    <div id="vitals">
+      <div class="vital"><span title="Ta vie">❤️</span><div class="vBar"><div id="heroFill"></div></div></div>
+      <div class="vital"><span title="État de la voiture">🚗</span><div class="vBar"><div id="carFill"></div></div></div>
+      <div id="weaponBox">
+        <span id="weaponIcon">👊</span>
+        <span id="weaponName">Poings</span>
+        <span class="wKeys">1-5 · molette</span>
+      </div>
     </div>
 
     <div id="missionPanel" class="panel hidden">
@@ -43,6 +71,7 @@
 
     <div id="message"></div>
     <div id="hint"></div>
+    <div id="actionHint" class="hidden"></div>
 
     <canvas id="minimap" width="200" height="200"></canvas>
 
@@ -58,10 +87,13 @@
   <!-- ===== Contrôles tactiles (téléphone / tablette) ===== -->
   <div id="touch" class="hidden">
     <div id="joy"><div id="joyKnob"></div></div>
+    <button id="fireBtn" title="Tirer">🔫</button>
     <div id="tools">
+      <button data-a="car" title="Sortir / monter / voler une voiture">🚪</button>
+      <button data-a="weapon" title="Changer d'arme">🔄</button>
       <button data-a="horn" title="Klaxon">📯</button>
       <button data-a="cam" title="Caméra">🎥</button>
-      <button data-a="reset" title="Replacer la voiture">↺</button>
+      <button data-a="reset" title="Replacer / appeler la voiture">↺</button>
     </div>
     <div id="pedals">
       <button data-k="drift" class="tdrift">DRIFT</button>
@@ -83,7 +115,7 @@
   <div id="menu" class="overlay">
     <div class="menuBox">
       <h1>TURBO <span>CITY</span> 3D</h1>
-      <p class="subtitle">Une grande ville ouverte : roule où tu veux, drifte, saute sur les tremplins, ramasse les pièces, fais des missions… et attention aux piétons !</p>
+      <p class="subtitle">Une grande ville ouverte : conduis, drifte, sors de ta voiture, vole celle des autres, ramasse les pièces, fais des missions… et démolis tout !</p>
 
       <h2>🚗 Voiture</h2>
       <div id="carList" class="cards"></div>
@@ -102,10 +134,12 @@
       <div id="assetStatus">⏳ Chargement des graphismes HD…</div>
 
       <div class="help">
-        <b>Clavier :</b> Flèches ou WASD/ZQSD = conduire · <b>Espace</b> = drift · <b>H</b> = klaxon · <b>R</b> = remettre la voiture sur la route · <b>C</b> = couleur · <b>V</b> = caméra · <b>Échap</b> = pause<br>
-        <b>Téléphone :</b> joystick à gauche = tourner · <b>▲</b> accélérer · <b>▼</b> freiner/reculer · <b>DRIFT</b> en tournant · 📯 klaxon · 🎥 caméra · ↺ replacer. Joue en mode paysage !<br>
-        <b>Comment drifter ?</b> Roule vite (+40 km/h), tourne et maintiens <b>Espace</b>. Flèche vers l'intérieur = virage serré, vers l'extérieur = plus large. Relâche Espace pour le <b>turbo</b> (🔵 → 🟠 → 🟣 SUPER).<br>
-        <b>Dans la ville :</b> va sur le marqueur jaune ⭐ pour lancer une mission, ramasse les pièces 🪙 et cherche les skateparks avec des tremplins ! Des <b>piétons</b> 🚶 se promènent : klaxonne pour qu'ils s'écartent.<br>
+        <b>En voiture :</b> Flèches ou ZQSD/WASD = conduire · <b>Espace</b> = drift · <b>H</b> = klaxon · <b>R</b> = remettre la voiture sur la route · <b>C</b> / <b>V</b> = caméra · <b>Échap</b> / <b>P</b> = pause<br>
+        <b>À pied :</b> <b>F</b> ou <b>Entrée</b> = sortir / monter / voler une voiture · <b>Maj</b> = courir · <b>Espace</b> = sauter · <b>Clic</b> ou <b>X</b> = tirer (visée automatique) · <b>1-5</b>, molette, <b>E</b> ou <b>Tab</b> = changer d'arme · <b>R</b> = appeler ta voiture<br>
+        <b>Téléphone :</b> joystick = tourner · <b>▲</b> avancer · <b>▼</b> freiner/reculer · <b>DRIFT</b> (à pied : <b>SAUT</b>) · 🔫 tirer · 🚪 sortir/monter/voler · 🔄 arme · 📯 klaxon · 🎥 caméra · ↺ replacer. Joue en mode paysage !<br>
+        <b>Comment drifter ?</b> Roule vite (+40 km/h), tourne et maintiens <b>Espace</b>, puis relâche pour le <b>turbo</b> (🔵 → 🟠 → 🟣 SUPER).<br>
+        <b>Tout se démolit :</b> les voitures abîmées fument, prennent feu puis explosent (parfois en chaîne !), les arbres et lampadaires tombent. Ta voiture est détruite ? Appuie sur <b>R</b> pour en avoir une neuve. Si ta vie tombe à zéro, tu te réveilles à l'hôpital.<br>
+        <b>Dans la ville :</b> va sur le marqueur jaune ⭐ pour lancer une mission, ramasse les pièces 🪙 et cherche les skateparks avec des tremplins !<br>
         <span class="credits">Graphismes HD chargés en ligne : ciels HDR (Poly Haven), textures et modèle Ferrari 3D des exemples officiels de three.js.</span>
       </div>
     </div>
@@ -117,10 +151,11 @@
       <h1>PAUSE</h1>
       <button id="resumeBtn">REPRENDRE ▶</button>
       <button id="menuBtn" class="secondary">MENU PRINCIPAL</button>
-      <div class="help">Échap ou P = reprendre · R = remettre la voiture sur la route · H = klaxon</div>
+      <div class="help">Échap ou P = reprendre · F = sortir / monter / voler · R = replacer ou appeler ta voiture · 1-5 = armes · H = klaxon</div>
     </div>
   </div>
 
-  <script type="module" src="game.js"></script>
+  <!-- Tout le jeu est dans le dossier src/ (point d'entrée : src/main.js) -->
+  <script type="module" src="src/main.js" onerror="showGameError('impossible de charger src/main.js')"></script>
 </body>
 </html>
