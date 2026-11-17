@@ -6,31 +6,55 @@ html, body {
 }
 canvas { display: block; }
 
-#hud {
-  position: fixed; top: 12px; left: 12px; color: #fff;
-  background: rgba(0,0,0,.45); padding: 10px 14px; border-radius: 10px;
-  font-size: 16px; line-height: 1.6;
+#hud, #speed {
+  position: fixed; top: 12px; color: #fff;
+  background: rgba(10, 14, 30, .45); backdrop-filter: blur(6px);
+  border: 1px solid rgba(255,255,255,.15);
+  padding: 10px 14px; border-radius: 12px;
 }
+#hud { left: 12px; font-size: 16px; line-height: 1.6; }
 #hud span { font-weight: bold; font-variant-numeric: tabular-nums; }
 
 #speed {
-  position: fixed; top: 12px; right: 12px; color: #fff;
-  background: rgba(0,0,0,.45); padding: 10px 14px; border-radius: 10px;
-  font-size: 28px; font-weight: bold; font-variant-numeric: tabular-nums;
+  right: 12px; font-size: 30px; font-weight: 900; font-style: italic;
+  font-variant-numeric: tabular-nums; transition: color .2s, box-shadow .2s;
 }
 #speed small { font-size: 14px; font-weight: normal; }
+#speed.boost { color: #ffb347; box-shadow: 0 0 22px rgba(255,140,0,.8); }
 
 #msg {
   position: fixed; top: 35%; left: 50%; transform: translate(-50%, -50%);
-  color: #fff; font-size: 72px; font-weight: 900;
-  text-shadow: 0 4px 12px rgba(0,0,0,.6);
+  color: #fff; font-size: 72px; font-weight: 900; font-style: italic;
+  text-shadow: 0 4px 14px rgba(0,0,0,.6);
   opacity: 0; transition: opacity .3s; pointer-events: none; white-space: nowrap;
 }
 
+/* ---- Drift ---- */
+#drift {
+  position: fixed; top: 15%; left: 50%; transform: translateX(-50%);
+  text-align: center; color: #fff; pointer-events: none; font-style: italic;
+  text-shadow: 0 3px 10px rgba(0,0,0,.65);
+}
+#drift.hidden { display: none; }
+#driftTitle { font-size: 26px; font-weight: 900; letter-spacing: 2px; }
+#driftPts { font-size: 42px; font-weight: 900; font-variant-numeric: tabular-nums; }
+#driftBar {
+  width: 200px; height: 8px; margin: 6px auto 0; border-radius: 4px; overflow: hidden;
+  background: rgba(255,255,255,.25);
+}
+#driftBar i { display: block; height: 100%; width: 0; background: currentColor; }
+#drift.lvl1 { color: #4cc9f0; }
+#drift.lvl2 { color: #ff9f1c; }
+#drift.lvl3 { color: #c77dff; animation: pulse .35s infinite; }
+#drift.done { color: #7cfc9a; }
+#drift.fail { color: #ff4d4d; }
+#drift.done #driftBar, #drift.fail #driftBar { visibility: hidden; }
+@keyframes pulse { 50% { transform: translateX(-50%) scale(1.12); } }
+
 #help {
   position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%);
-  color: #fff; background: rgba(0,0,0,.4); padding: 6px 12px; border-radius: 8px;
-  font-size: 13px; white-space: nowrap;
+  color: #fff; background: rgba(10,14,30,.45); padding: 6px 12px; border-radius: 8px;
+  font-size: 13px; max-width: 95vw; text-align: center;
 }
 
 #touch {
@@ -42,6 +66,7 @@ canvas { display: block; }
   width: 72px; height: 72px; border-radius: 50%; border: none;
   background: rgba(255,255,255,.3); color: #fff; font-size: 28px; touch-action: none;
 }
+#touch button.drift { font-size: 15px; font-weight: 900; background: rgba(199,125,255,.45); }
 #touch button:active { background: rgba(255,255,255,.55); }
 @media (pointer: coarse) {
   #touch { display: flex; }
