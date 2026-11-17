@@ -2,7 +2,11 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#05081a">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Turbo City 3D</title>
   <link rel="stylesheet" href="style.css">
   <script type="importmap">
@@ -51,16 +55,27 @@
     <button id="pauseBtn" title="Pause">❚❚</button>
   </div>
 
-  <!-- ===== Contrôles tactiles ===== -->
+  <!-- ===== Contrôles tactiles (téléphone / tablette) ===== -->
   <div id="touch" class="hidden">
-    <div class="tleft">
-      <button data-k="left">◀</button>
-      <button data-k="right">▶</button>
+    <div id="joy"><div id="joyKnob"></div></div>
+    <div id="tools">
+      <button data-a="horn" title="Klaxon">📯</button>
+      <button data-a="cam" title="Caméra">🎥</button>
+      <button data-a="reset" title="Replacer la voiture">↺</button>
     </div>
-    <div class="tright">
+    <div id="pedals">
       <button data-k="drift" class="tdrift">DRIFT</button>
-      <button data-k="down">▼</button>
+      <button data-k="down" class="tbrake">▼</button>
       <button data-k="up" class="tgas">▲</button>
+    </div>
+  </div>
+
+  <!-- ===== Message "tourne ton téléphone" ===== -->
+  <div id="rotate" class="hidden">
+    <div class="rotBox">
+      <div class="rotIcon">📱↻</div>
+      <p>Tourne ton téléphone en <b>mode paysage</b> pour mieux jouer !</p>
+      <button id="rotateBtn">Jouer quand même</button>
     </div>
   </div>
 
@@ -68,7 +83,7 @@
   <div id="menu" class="overlay">
     <div class="menuBox">
       <h1>TURBO <span>CITY</span> 3D</h1>
-      <p class="subtitle">Une grande ville ouverte : roule où tu veux, drifte, saute sur les tremplins, ramasse les pièces et fais des missions !</p>
+      <p class="subtitle">Une grande ville ouverte : roule où tu veux, drifte, saute sur les tremplins, ramasse les pièces, fais des missions… et attention aux piétons !</p>
 
       <h2>🚗 Voiture</h2>
       <div id="carList" class="cards"></div>
@@ -84,11 +99,14 @@
 
       <button id="playBtn">JOUER ▶</button>
       <div id="records"></div>
+      <div id="assetStatus">⏳ Chargement des graphismes HD…</div>
 
       <div class="help">
-        <b>Commandes :</b> Flèches ou WASD/ZQSD = conduire · <b>Espace</b> = drift · <b>R</b> = remettre la voiture sur la route · <b>C</b> = couleur · <b>V</b> = caméra · <b>Échap</b> = pause<br>
+        <b>Clavier :</b> Flèches ou WASD/ZQSD = conduire · <b>Espace</b> = drift · <b>H</b> = klaxon · <b>R</b> = remettre la voiture sur la route · <b>C</b> = couleur · <b>V</b> = caméra · <b>Échap</b> = pause<br>
+        <b>Téléphone :</b> joystick à gauche = tourner · <b>▲</b> accélérer · <b>▼</b> freiner/reculer · <b>DRIFT</b> en tournant · 📯 klaxon · 🎥 caméra · ↺ replacer. Joue en mode paysage !<br>
         <b>Comment drifter ?</b> Roule vite (+40 km/h), tourne et maintiens <b>Espace</b>. Flèche vers l'intérieur = virage serré, vers l'extérieur = plus large. Relâche Espace pour le <b>turbo</b> (🔵 → 🟠 → 🟣 SUPER).<br>
-        <b>Dans la ville :</b> va sur le marqueur jaune ⭐ pour lancer une mission, ramasse les pièces 🪙 et cherche les skateparks avec des tremplins !
+        <b>Dans la ville :</b> va sur le marqueur jaune ⭐ pour lancer une mission, ramasse les pièces 🪙 et cherche les skateparks avec des tremplins ! Des <b>piétons</b> 🚶 se promènent : klaxonne pour qu'ils s'écartent.<br>
+        <span class="credits">Graphismes HD chargés en ligne : ciels HDR (Poly Haven), textures et modèle Ferrari 3D des exemples officiels de three.js.</span>
       </div>
     </div>
   </div>
@@ -99,7 +117,7 @@
       <h1>PAUSE</h1>
       <button id="resumeBtn">REPRENDRE ▶</button>
       <button id="menuBtn" class="secondary">MENU PRINCIPAL</button>
-      <div class="help">Échap ou P = reprendre · R = remettre la voiture sur la route</div>
+      <div class="help">Échap ou P = reprendre · R = remettre la voiture sur la route · H = klaxon</div>
     </div>
   </div>
 

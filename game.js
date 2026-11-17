@@ -4,6 +4,8 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { loadTexture, loadHDR, loadModel } from './assets.js';
+import { createPedestrians } from './pnj.js';
 
 // =====================================================
 //  OUTILS
@@ -31,6 +33,7 @@ const rr = (a, b) => a + rand() * (b - a);
 const pick = (arr) => arr[Math.floor(rand() * arr.length)];
 const isMobile = window.matchMedia('(pointer: coarse)').matches || /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
 const dummy = new THREE.Object3D();
+if (isMobile) document.body.classList.add('touchUI');
 
 // =====================================================
 //  DONNÉES DU JEU
@@ -40,6 +43,7 @@ const CARS = [
   { name: 'Drift King', desc: 'La reine de la glisse', style: 'drift', maxSpeed: 49, accel: 19, turn: 2.35, drift: 1.3, stats: [3, 3, 4, 5] },
   { name: 'Muscle V8', desc: 'Très rapide mais lourde', style: 'muscle', maxSpeed: 60, accel: 17, turn: 1.9, drift: 0.9, stats: [5, 3, 2, 3] },
   { name: 'Rally Mini', desc: 'Petite, agile et nerveuse', style: 'mini', maxSpeed: 46, accel: 24, turn: 2.7, drift: 1.1, stats: [2, 5, 5, 3] },
+  { name: 'Ferrari 3D', desc: 'Vrai modèle 3D chargé en ligne', style: 'ferrari', maxSpeed: 58, accel: 22, turn: 2.25, drift: 1.05, stats: [5, 4, 4, 3] },
 ];
 const STAT_NAMES = ['Vitesse', 'Accélération', 'Maniabilité', 'Drift'];
 const COLORS = ['#e63946', '#f77f00', '#ffd60a', '#2ec4b6', '#3a86ff', '#8338ec', '#ff4fa3', '#f4f4f4', '#222222', '#7cb518'];
@@ -78,10 +82,10 @@ const persist = () => { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save
 //  RENDU / SCÈNE
 // =====================================================
 const renderer = new THREE.WebGLRenderer({ antialias: !isMobile, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.5 : 2));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.25 : 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = isMobile ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 $('game').appendChild(renderer.domElement);
@@ -106,9 +110,40 @@ window.addEventListener('resize', () => {
   if (composer) composer.setSize(window.innerWidth, window.innerHeight);
 });
 
+// ----- Reflets (environnement) : studio de base, puis vrais ciels HDR chargés en ligne -----
 const pmrem = new THREE.PMREMGenerator(renderer);
-const envMap = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+const roomEnv = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+let envMap = roomEnv;
 const envMats = [];
+const HDR_FILES = {
+  day: 'textures/equirectangular/royal_esplanade_1k.hdr',
+  sunset: 'textures/equirectangular/venice_sunset_1k.hdr',
+};
+const hdrCache = {};
+let envToken = 0;
+function setEnvMap(t) {
+  if (envMap === t) return;
+  envMap = t;
+  const list = car ? envMats.concat(car.envList) : envMats;
+  for (const m of list) { m.envMap = t; m.needsUpdate = true; }
+}
+function refreshEnv(id) {
+  const tok = ++envToken;
+  const file = HDR_FILES[id];
+  if (!file) { setEnvMap(roomEnv); return Promise.resolve(true); }
+  if (!hdrCache[id]) {
+    hdrCache[id] = loadHDR(file).then((t) => {
+      if (!t) return null;
+      const e = pmrem.fromEquirectangular(t).texture;
+      t.dispose();
+      return e;
+    });
+  }
+  return hdrCache[id].then((e) => {
+    if (tok === envToken) setEnvMap(e || roomEnv);
+    return !!e;
+  });
+}
 
 // ----- Lumières -----
 const hemi = new THREE.HemisphereLight(0xdcecff, 0x5b6a4c, 1.0);
@@ -174,7 +209,8 @@ for (let i = 0; i < 40; i++) {
 }
 
 // =====================================================
-//  TEXTURES
+//  TEXTURES (dessinées par le code, remplacées par des
+//  photos en ligne quand elles sont chargées)
 // =====================================================
 function canvasTex(w, h, draw) {
   const c = document.createElement('canvas');
@@ -290,6 +326,7 @@ const sidewalkMat = new THREE.MeshStandardMaterial({ map: sidewalkTex, roughness
 sidewalkTex.repeat.set(16, 16);
 const grassMat = new THREE.MeshStandardMaterial({ map: grassTex, roughness: 1 });
 grassTex.repeat.set(10, 10);
+const groundMat = new THREE.MeshStandardMaterial({ color: 0x4f7d3a, roughness: 1 });
 const concreteMat = new THREE.MeshStandardMaterial({ map: concreteTex, roughness: 0.9 });
 concreteTex.repeat.set(8, 8);
 const waterMat = new THREE.MeshStandardMaterial({ color: 0x2f6fc0, roughness: 0.08, metalness: 0.3, envMap });
@@ -452,7 +489,7 @@ function fillStunt(b) {
 
 function buildCity() {
   // Sol (herbe) et routes
-  const grass = new THREE.Mesh(new THREE.PlaneGeometry(4000, 4000), new THREE.MeshStandardMaterial({ color: 0x4f7d3a, roughness: 1 }));
+  const grass = new THREE.Mesh(new THREE.PlaneGeometry(4000, 4000), groundMat);
   grass.rotation.x = -Math.PI / 2; grass.position.y = -0.05; grass.receiveShadow = true;
   scene.add(grass);
   asphaltTex.repeat.set(CITY / 8, CITY / 8);
@@ -618,6 +655,8 @@ const CAR_SHAPES = {
   drift: { L: 4.5, W: 2.0, H: 0.55, cabL: 1.9, cabH: 0.55, cabW: 1.55, cabZ: 0.3, spoiler: 1 },
   muscle: { L: 4.9, W: 2.15, H: 0.7, cabL: 2.0, cabH: 0.55, cabW: 1.65, cabZ: 0.45, spoiler: 0, scoop: true },
   mini: { L: 3.6, W: 1.85, H: 0.7, cabL: 2.1, cabH: 0.75, cabW: 1.65, cabZ: 0.15, spoiler: 0, roofLights: true },
+  // forme de secours tant que le vrai modèle 3D n'est pas chargé
+  ferrari: { L: 4.5, W: 1.95, H: 0.5, cabL: 1.8, cabH: 0.48, cabW: 1.5, cabZ: 0.35, spoiler: 0 },
 };
 const wheelGeo = new THREE.CylinderGeometry(0.42, 0.42, 0.34, 20); wheelGeo.rotateZ(Math.PI / 2);
 const rimGeo = new THREE.CylinderGeometry(0.26, 0.26, 0.36, 10); rimGeo.rotateZ(Math.PI / 2);
@@ -627,7 +666,7 @@ envMats.push(rimMat);
 const darkMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.7 });
 
 function buildCar(style, color) {
-  const S = CAR_SHAPES[style];
+  const S = CAR_SHAPES[style] || CAR_SHAPES.gt;
   const root = new THREE.Group(); root.rotation.order = 'YXZ';
   const chassis = new THREE.Group(); chassis.rotation.order = 'YXZ';
   root.add(chassis);
@@ -669,7 +708,81 @@ function buildCar(style, color) {
   spot.position.set(0, 1.0, -S.L / 2);
   spot.target.position.set(0, 0, -S.L / 2 - 20);
   root.add(spot, spot.target);
-  return { root, chassis, wheels, fronts, paint, glass, headMat, tailMat, spot, S };
+  return { root, chassis, wheels, fronts, paint, glass, headMat, tailMat, spot, S, spin: -1, envList: [paint, glass] };
+}
+
+// ----- Ferrari : vrai modèle 3D (.glb) chargé en ligne -----
+let ferrariModel = null, ferrariAO = null;
+function buildFerrari(color) {
+  const S = CAR_SHAPES.ferrari;
+  const root = new THREE.Group(); root.rotation.order = 'YXZ';
+  const chassis = new THREE.Group(); chassis.rotation.order = 'YXZ';
+  root.add(chassis);
+  const paint = new THREE.MeshPhysicalMaterial({ color, metalness: 0.6, roughness: 0.32, clearcoat: 1, clearcoatRoughness: 0.04, envMap });
+  const detail = new THREE.MeshStandardMaterial({ color: 0xdfe3e8, metalness: 1, roughness: 0.3, envMap });
+  const glass = new THREE.MeshPhysicalMaterial({ color: 0x1b2836, metalness: 0.2, roughness: 0.04, clearcoat: 1, transparent: true, opacity: 0.6, envMap });
+  const headMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff4d6, emissiveIntensity: 1 });
+  const tailMat = new THREE.MeshStandardMaterial({ color: 0x550000, emissive: 0xff1a1a, emissiveIntensity: 0.6 });
+
+  const model = ferrariModel.clone(true);
+  const setMat = (name, mat) => { const o = model.getObjectByName(name); if (o) o.material = mat; };
+  setMat('body', paint);
+  for (const n of ['rim_fl', 'rim_fr', 'rim_rr', 'rim_rl', 'trim']) setMat(n, detail);
+  setMat('glass', glass);
+  model.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+
+  // roues : celles de devant sont mises dans un "pivot" pour pouvoir tourner
+  const wheels = [], fronts = [];
+  for (const n of ['wheel_fl', 'wheel_fr', 'wheel_rl', 'wheel_rr']) {
+    const w = model.getObjectByName(n);
+    if (!w) continue;
+    wheels.push(w);
+    if ((n === 'wheel_fl' || n === 'wheel_fr') && w.parent) {
+      const pivot = new THREE.Group();
+      pivot.position.copy(w.position);
+      w.parent.add(pivot);
+      pivot.add(w);
+      w.position.set(0, 0, 0);
+      fronts.push(pivot);
+    }
+  }
+
+  // le modèle regarde vers +z, nos voitures vers -z : on le retourne
+  model.rotation.y = Math.PI;
+  const holder = new THREE.Group();
+  holder.add(model);
+  const bb = new THREE.Box3().setFromObject(holder);
+  const size = bb.getSize(new THREE.Vector3());
+  const k = S.L / Math.max(size.x, size.z, 0.01);
+  holder.scale.setScalar(k);
+  holder.updateMatrixWorld(true);
+  bb.setFromObject(holder);
+  const c = bb.getCenter(new THREE.Vector3());
+  holder.position.set(-c.x, 0.02 - bb.min.y, -c.z);
+  chassis.add(holder);
+
+  // ombre douce sous la voiture (fournie avec le modèle)
+  if (ferrariAO) {
+    const sh = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.655 * 4, 1.3 * 4),
+      new THREE.MeshBasicMaterial({ map: ferrariAO, blending: THREE.MultiplyBlending, toneMapped: false, transparent: true, depthWrite: false, fog: false })
+    );
+    sh.rotation.x = -Math.PI / 2;
+    sh.position.y = 0.02;
+    sh.renderOrder = 2;
+    model.add(sh);
+  }
+
+  // petits phares et feux arrière (pour le freinage et la nuit)
+  for (const sx of [-1, 1]) {
+    box(0.34, 0.07, 0.12, headMat, sx * 0.66, 0.66, -S.L / 2 + 0.32, chassis, false);
+    box(0.3, 0.08, 0.08, tailMat, sx * 0.62, 0.78, S.L / 2 - 0.12, chassis, false);
+  }
+  const spot = new THREE.SpotLight(0xfff2d0, 0, 70, 0.55, 0.5, 1.3);
+  spot.position.set(0, 0.9, -S.L / 2);
+  spot.target.position.set(0, 0, -S.L / 2 - 20);
+  root.add(spot, spot.target);
+  return { root, chassis, wheels, fronts, paint, glass, headMat, tailMat, spot, S, spin: 1, envList: [paint, glass, detail] };
 }
 
 // ----- Voitures de la circulation -----
@@ -703,6 +816,7 @@ function buildTrafficCar() {
       g.add(w);
     }
   }
+  g.userData = { W, L, top: van ? 2.25 : 1.6 };
   return g;
 }
 
@@ -747,6 +861,7 @@ function spawnTraffic() {
 }
 
 function updateTraffic(dt) {
+  const pedObs = peds ? peds.obstacles() : [];
   for (const o of traffic) {
     let target = o.cruise;
     let f = Infinity;
@@ -758,6 +873,7 @@ function updateTraffic(dt) {
     };
     if (state !== 'menu') look(player.pos.x, player.pos.z);
     for (const q of traffic) if (q !== o) look(q.x, q.z);
+    for (const q of pedObs) look(q.x, q.z); // on s'arrête pour les piétons
     if (f < Infinity) target = Math.min(target, Math.max(0, f - 6.5) * 1.5);
     if (o.stun > 0) { o.stun -= dt; target = 0; }
     o.speed = lerp(o.speed, target, damp(target < o.speed ? 5 : 1.5, dt));
@@ -951,7 +1067,8 @@ let lastMarks = [null, null];
 function setPlayerCar() {
   if (car) scene.remove(car.root);
   player.def = CARS[save.car];
-  car = buildCar(player.def.style, COLORS[save.color]);
+  const col = COLORS[save.color];
+  car = (player.def.style === 'ferrari' && ferrariModel) ? buildFerrari(col) : buildCar(player.def.style, col);
   scene.add(car.root);
   updateCarLights();
   syncCarMesh(0);
@@ -960,8 +1077,7 @@ function updateCarLights() {
   if (!car) return;
   car.spot.intensity = currentTime.spot;
   car.headMat.emissiveIntensity = currentTime.head;
-  car.paint.envMapIntensity = currentTime.env;
-  car.glass.envMapIntensity = currentTime.env;
+  for (const m of car.envList) m.envMapIntensity = currentTime.env;
 }
 
 function nearestRoad(x, z) {
@@ -1076,7 +1192,7 @@ function localToWorld(lx, lz) {
 function updatePlayer(dt) {
   const inp = getInput();
   const c = player.def, A = ASSIST[save.assist] || ASSIST.normal;
-  const steerIn = (inp.left ? 1 : 0) - (inp.right ? 1 : 0);
+  const steerIn = inp.steer; // de -1 (droite) à +1 (gauche), progressif avec le joystick
   player.steer = lerp(player.steer, steerIn, damp(10, dt));
   braking = inp.down && player.speed > 1;
   const p = player.pos;
@@ -1092,7 +1208,7 @@ function updatePlayer(dt) {
     else if (player.speed < 7) endDrift(false);
   }
   // début du drift (Espace + tourner, dans n'importe quel ordre)
-  if (!D.drifting && player.grounded && inp.drift && steerIn !== 0 && player.speed > 11) startDrift(Math.sign(steerIn));
+  if (!D.drifting && player.grounded && inp.drift && Math.abs(steerIn) > 0.3 && player.speed > 11) startDrift(Math.sign(steerIn));
 
   if (player.grounded) {
     if (D.drifting) {
@@ -1201,7 +1317,7 @@ function syncCarMesh(dt) {
   const rollT = D.drifting ? -D.dir * 0.06 : -player.steer * 0.045 * clamp(sp / 30, 0, 1);
   car.chassis.rotation.z = lerp(car.chassis.rotation.z, rollT, damp(6, dt));
   car.chassis.rotation.x = lerp(car.chassis.rotation.x, braking ? -0.03 : 0, damp(6, dt));
-  for (const w of car.wheels) w.rotation.x -= player.speed * dt / 0.42;
+  for (const w of car.wheels) w.rotation.x += car.spin * player.speed * dt / 0.42;
   const steerA = D.drifting ? -D.dir * 0.3 + player.steer * 0.15 : player.steer * 0.45;
   for (const f of car.fronts) f.rotation.y = steerA;
   car.tailMat.emissiveIntensity = braking ? 3 : (currentTime === TIME_SET.day ? 0.4 : 1.2);
@@ -1237,19 +1353,46 @@ function updateCoins(dt, t) {
 }
 
 // =====================================================
-//  CONTRÔLES
+//  CONTRÔLES (clavier + écran tactile)
 // =====================================================
 const keys = {};
-const touch = { left: false, right: false, up: false, down: false, drift: false };
+const touch = { up: false, down: false, drift: false, steer: 0 };
 function getInput() {
+  const ks = ((keys.ArrowLeft || keys.KeyA) ? 1 : 0) - ((keys.ArrowRight || keys.KeyD) ? 1 : 0);
   return {
     up: keys.ArrowUp || keys.KeyW || touch.up,
     down: keys.ArrowDown || keys.KeyS || touch.down,
-    left: keys.ArrowLeft || keys.KeyA || touch.left,
-    right: keys.ArrowRight || keys.KeyD || touch.right,
+    steer: ks !== 0 ? ks : touch.steer,
     drift: keys.Space || keys.ShiftLeft || keys.ShiftRight || touch.drift,
   };
 }
+
+// ----- Klaxon : petit son + les piétons proches s'écartent -----
+let audioCtx = null, hornCd = 0;
+function horn() {
+  if (state !== 'play' || hornCd > 0) return;
+  hornCd = 0.5;
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const t = audioCtx.currentTime;
+    const g = audioCtx.createGain();
+    const f = audioCtx.createBiquadFilter();
+    f.type = 'lowpass'; f.frequency.value = 1400;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.22, t + 0.03);
+    g.gain.setValueAtTime(0.22, t + 0.32);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.45);
+    f.connect(g); g.connect(audioCtx.destination);
+    for (const fr of [370, 466]) {
+      const o = audioCtx.createOscillator();
+      o.type = 'sawtooth'; o.frequency.value = fr;
+      o.connect(f); o.start(t); o.stop(t + 0.47);
+    }
+  } catch (e) { /* pas de son */ }
+  if (peds) peds.scare(player.pos.x, player.pos.z, 30);
+}
+
 window.addEventListener('keydown', (e) => {
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
   if (e.repeat) { keys[e.code] = true; return; }
@@ -1259,11 +1402,44 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyR') { resetPlayer(false); showMessage('Voiture replacée', '#ffffff', 0.8); }
   if (e.code === 'KeyC') { save.color = (save.color + 1) % COLORS.length; car.paint.color.set(COLORS[save.color]); persist(); }
   if (e.code === 'KeyV') camMode = (camMode + 1) % 3;
+  if (e.code === 'KeyH') horn();
 });
 window.addEventListener('keyup', (e) => { keys[e.code] = false; });
 window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; if (state === 'play') togglePause(); });
 
-document.querySelectorAll('#touch button').forEach((b) => {
+// ----- Joystick (volant) : glisser le doigt à gauche / à droite -----
+const joy = $('joy'), knob = $('joyKnob');
+let joyId = null, joyX = 0;
+function joyMove(e) {
+  const R = Math.max(10, (joy.clientWidth - knob.offsetWidth) / 2);
+  const dx = clamp(e.clientX - joyX, -R, R);
+  knob.style.transform = 'translateX(' + dx + 'px)';
+  const s = clamp(-dx / (R * 0.85), -1, 1);
+  const a = Math.abs(s);
+  touch.steer = a < 0.12 ? 0 : Math.sign(s) * (a - 0.12) / 0.88; // petite zone morte au centre
+}
+function joyEnd(e) {
+  if (e.pointerId !== joyId) return;
+  joyId = null; touch.steer = 0;
+  knob.style.transform = '';
+  joy.classList.remove('active');
+}
+joy.addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  joyId = e.pointerId;
+  try { joy.setPointerCapture(e.pointerId); } catch (err) { /* rien */ }
+  const r = joy.getBoundingClientRect();
+  joyX = r.left + r.width / 2;
+  joy.classList.add('active');
+  joyMove(e);
+});
+joy.addEventListener('pointermove', (e) => { if (e.pointerId === joyId) joyMove(e); });
+joy.addEventListener('pointerup', joyEnd);
+joy.addEventListener('pointercancel', joyEnd);
+joy.addEventListener('lostpointercapture', joyEnd);
+
+// ----- Pédales (accélérer, freiner, drift) -----
+document.querySelectorAll('#touch button[data-k]').forEach((b) => {
   const k = b.dataset.k;
   const on = (e) => { e.preventDefault(); touch[k] = true; b.classList.add('active'); };
   const off = (e) => { e.preventDefault(); touch[k] = false; b.classList.remove('active'); };
@@ -1272,6 +1448,34 @@ document.querySelectorAll('#touch button').forEach((b) => {
   b.addEventListener('pointerleave', off);
   b.addEventListener('pointercancel', off);
 });
+// ----- Boutons outils (klaxon, caméra, replacer) -----
+document.querySelectorAll('#tools button[data-a]').forEach((b) => {
+  b.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    b.classList.add('active');
+    setTimeout(() => b.classList.remove('active'), 150);
+    const a = b.dataset.a;
+    if (a === 'horn') horn();
+    else if (a === 'cam') camMode = (camMode + 1) % 3;
+    else if (a === 'reset' && state === 'play') { resetPlayer(false); showMessage('Voiture replacée', '#ffffff', 0.8); }
+  });
+});
+if (isMobile) window.addEventListener('contextmenu', (e) => e.preventDefault());
+
+// ----- Plein écran + mode paysage (téléphone) -----
+function goFullscreen() {
+  if (!isMobile) return;
+  const el = document.documentElement;
+  const req = el.requestFullscreen || el.webkitRequestFullscreen;
+  if (!req || document.fullscreenElement || document.webkitFullscreenElement) return;
+  const lock = () => {
+    try { if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(() => {}); } catch (e) { /* rien */ }
+  };
+  try {
+    const pr = req.call(el);
+    if (pr && pr.then) pr.then(lock).catch(() => {}); else lock();
+  } catch (e) { /* rien */ }
+}
 
 // =====================================================
 //  CAMÉRA
@@ -1432,12 +1636,22 @@ function applyTime(id) {
   renderer.toneMappingExposure = T.exposure;
   if (bloom) { bloom.strength = T.bloom[0]; bloom.radius = T.bloom[1]; bloom.threshold = T.bloom[2]; }
   updateCarLights();
+  return refreshEnv(TIME_SET[id] ? id : 'day'); // vrai ciel HDR pour les reflets
 }
 
 // =====================================================
 //  MENU / ÉTATS DU JEU
 // =====================================================
 let state = 'menu';
+
+// Téléphone tenu debout : on propose de le tourner
+const portraitMQ = window.matchMedia('(orientation: portrait)');
+function checkRotate() {
+  const show = isMobile && state !== 'menu' && portraitMQ.matches && !document.body.classList.contains('portraitOK');
+  $('rotate').classList.toggle('hidden', !show);
+}
+$('rotateBtn').onclick = () => { document.body.classList.add('portraitOK'); checkRotate(); };
+window.addEventListener('resize', checkRotate);
 
 function makeChoices(id, list, key, cb) {
   const el = $(id); el.innerHTML = '';
@@ -1454,7 +1668,8 @@ function buildMenu() {
   CARS.forEach((c, i) => {
     const d = document.createElement('div');
     d.className = 'card' + (i === save.car ? ' selected' : '');
-    d.innerHTML = '<div class="cardTitle">' + c.name + '</div><div class="cardDesc">' + c.desc + '</div>' +
+    const desc = c.style === 'ferrari' && !ferrariModel ? c.desc + ' (chargement…)' : c.desc;
+    d.innerHTML = '<div class="cardTitle">' + c.name + '</div><div class="cardDesc">' + desc + '</div>' +
       STAT_NAMES.map((n, k) => '<div class="stat"><span>' + n + '</span><div class="bar"><div style="width:' + c.stats[k] * 20 + '%"></div></div></div>').join('');
     d.onclick = () => { save.car = i; persist(); setPlayerCar(); buildMenu(); };
     list.appendChild(d);
@@ -1474,7 +1689,9 @@ function buildMenu() {
 }
 
 function startGame() {
+  goFullscreen();
   state = 'play';
+  document.body.classList.add('playing');
   $('menu').classList.add('hidden');
   $('hud').classList.remove('hidden');
   if (isMobile) $('touch').classList.remove('hidden');
@@ -1485,23 +1702,27 @@ function startGame() {
   D.mult = 1; D.combo = 0; D.show = 0;
   camera.position.set(player.pos.x, 4, player.pos.z + 9);
   $('hint').innerHTML = isMobile
-    ? '▲ accélérer · ◀ ▶ tourner · DRIFT en tournant · Va au marqueur jaune ⭐ pour une mission !'
-    : 'Flèches/WASD = conduire · Espace en tournant = drift · Va au marqueur jaune ⭐ (tout droit) pour une mission · Ramasse les pièces 🪙';
+    ? 'Joystick = tourner · ▲ accélérer · ▼ freiner · DRIFT en tournant · 📯 klaxon · Va au marqueur ⭐ pour une mission !'
+    : 'Flèches/WASD = conduire · Espace en tournant = drift · H = klaxon 📯 · Attention aux piétons 🚶 · Va au marqueur jaune ⭐ pour une mission · Ramasse les pièces 🪙';
   $('hint').style.opacity = 1;
   hintTimer = 9;
   refreshStats();
+  checkRotate();
   clock.getDelta();
 }
 function toMenu() {
   state = 'menu';
+  document.body.classList.remove('playing');
   $('pause').classList.add('hidden');
   $('hud').classList.add('hidden');
   $('touch').classList.add('hidden');
   $('menu').classList.remove('hidden');
+  touch.up = touch.down = touch.drift = false; touch.steer = 0;
   cancelMission();
   resetPlayer(true);
   syncCarMesh(0);
   buildMenu();
+  checkRotate();
 }
 function togglePause() {
   if (state === 'play') { state = 'pause'; $('pause').classList.remove('hidden'); }
@@ -1513,16 +1734,72 @@ $('menuBtn').onclick = toMenu;
 $('pauseBtn').onclick = togglePause;
 
 // =====================================================
+//  PIÉTONS (PNJ) : on leur donne la liste des voitures
+// =====================================================
+let peds = null;
+const playerInfo = { player: true, x: 0, z: 0, y: 0, h: 0, vx: 0, vz: 0, speed: 0, W: 2, L: 4.4, top: 1.25 };
+const pedCars = [];
+function carsForPeds() {
+  pedCars.length = 0;
+  if (state !== 'menu' && car) {
+    const P = playerInfo;
+    P.x = player.pos.x; P.z = player.pos.z; P.y = player.y; P.h = player.h;
+    P.vx = -Math.sin(player.vh) * player.speed; P.vz = -Math.cos(player.vh) * player.speed;
+    P.speed = player.speed; P.W = car.S.W; P.L = car.S.L;
+    pedCars.push(P);
+  }
+  for (const o of traffic) {
+    const u = o.mesh.userData;
+    const c = o.pc || (o.pc = { player: false, y: 0, W: u.W || 2, L: u.L || 4.4, top: u.top || 1.5 });
+    c.x = o.vx; c.z = o.vz; c.h = o.heading;
+    c.vx = o.dir.x * o.speed; c.vz = o.dir.z * o.speed; c.speed = o.speed;
+    pedCars.push(c);
+  }
+  return pedCars;
+}
+
+// =====================================================
 //  DÉMARRAGE
 // =====================================================
 buildCity();
+peds = createPedestrians({ scene, N, BLOCK, CELL, blockCenter, colliders, count: isMobile ? 28 : 64, shadows: !isMobile });
 drawMapBase();
-applyTime(save.time);
+const envReady = applyTime(save.time);
 setPlayerCar();
 resetPlayer(true);
 syncCarMesh(0);
 spawnTraffic();
 buildMenu();
+
+// ----- Assets en ligne (chargés en arrière-plan, le jeu marche sans) -----
+const assetJobs = [envReady];
+assetJobs.push(loadTexture('textures/terrain/grasslight-big.jpg').then((t) => {
+  if (!t) return false;
+  t.repeat.set(6, 6);
+  grassMat.map = t; grassMat.color.set('#c9dcb5'); grassMat.needsUpdate = true;
+  const t2 = t.clone(); t2.repeat.set(300, 300); t2.needsUpdate = true;
+  groundMat.map = t2; groundMat.color.set('#9fb88f'); groundMat.needsUpdate = true;
+  return true;
+}));
+assetJobs.push(loadTexture('textures/water/Water_1_M_Normal.jpg', false).then((t) => {
+  if (!t) return false;
+  t.repeat.set(4, 4);
+  waterMat.normalMap = t; waterMat.normalScale.set(0.5, 0.5); waterMat.needsUpdate = true;
+  return true;
+}));
+assetJobs.push(Promise.all([loadModel('models/gltf/ferrari.glb'), loadTexture('models/gltf/ferrari_ao.png')]).then(([m, ao]) => {
+  if (!m) return false;
+  ferrariModel = m; ferrariAO = ao;
+  if (player.def.style === 'ferrari') setPlayerCar();
+  if (state === 'menu') buildMenu();
+  return true;
+}).catch(() => false));
+Promise.all(assetJobs.map((p) => Promise.resolve(p).catch(() => false))).then((r) => {
+  const ok = r.filter(Boolean).length;
+  $('assetStatus').textContent = ok === r.length ? '✨ Graphismes HD chargés (' + ok + '/' + r.length + ')'
+    : ok > 0 ? '✨ Graphismes HD : ' + ok + '/' + r.length + ' chargés'
+      : '⚠️ Assets en ligne indisponibles : graphismes de base';
+});
 
 const clock = new THREE.Clock();
 let elapsed = 0;
@@ -1531,22 +1808,29 @@ function loop() {
   const dt = Math.min(clock.getDelta(), 0.05);
   if (state !== 'pause') {
     elapsed += dt;
+    if (hornCd > 0) hornCd -= dt;
     if (state === 'play') {
       updatePlayer(dt);
       updateMission(dt);
       updateCamera(dt);
-      updateHUD(dt);
-      drawMinimap();
     } else {
       updateMenuCamera(dt);
     }
     updateTraffic(dt);
+    const hits = peds.update(dt, carsForPeds());
+    if (hits > 0 && state === 'play') {
+      player.speed *= 0.8;
+      shake = Math.max(shake, 0.35);
+      showMessage('Aïe ! Attention aux piétons ! 😬', '#ff9d2e', 1.3);
+    }
+    if (state === 'play') { updateHUD(dt); drawMinimap(); }
     updateCoins(dt, elapsed);
     updateParticles(dt);
     const star = marker.getObjectByName('star');
     star.rotation.y += dt * 2; star.position.y = 5 + Math.sin(elapsed * 2) * 0.4;
     markerMat.opacity = 0.28 + Math.sin(elapsed * 3) * 0.08;
     beamMat.opacity = 0.25 + Math.sin(elapsed * 4) * 0.08;
+    if (waterMat.normalMap) waterMat.normalMap.offset.set(elapsed * 0.03, elapsed * 0.02); // l'eau bouge
   }
   // le soleil (et ses ombres) suit la voiture
   sun.position.copy(player.pos).add(sunOffset);

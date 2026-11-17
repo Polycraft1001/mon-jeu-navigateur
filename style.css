@@ -1,11 +1,20 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+:root {
+  --st: env(safe-area-inset-top, 0px);
+  --sr: env(safe-area-inset-right, 0px);
+  --sb: env(safe-area-inset-bottom, 0px);
+  --sl: env(safe-area-inset-left, 0px);
+}
+
 html, body {
   width: 100%; height: 100%; overflow: hidden;
   background: #000;
   font-family: 'Segoe UI', Roboto, Arial, sans-serif;
   color: #fff;
   user-select: none; -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
   touch-action: none;
 }
 
@@ -79,24 +88,73 @@ html, body {
   background: rgba(10, 14, 28, 0.6); color: #fff; font-size: 18px; cursor: pointer;
 }
 
-/* ===== Tactile ===== */
-#touch { position: fixed; inset: auto 0 0 0; height: 160px; display: flex; justify-content: space-between; align-items: flex-end; padding: 16px; pointer-events: none; }
-#touch .tleft, #touch .tright { display: flex; gap: 12px; pointer-events: auto; }
+/* ===== Contrôles tactiles ===== */
+#touch { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
 #touch button {
-  width: 72px; height: 72px; border-radius: 50%;
+  border-radius: 50%;
   border: 2px solid rgba(255,255,255,0.5);
-  background: rgba(0,0,0,0.35); color: #fff; font-size: 26px; font-weight: 800;
-  touch-action: none;
+  background: rgba(0,0,0,0.35); color: #fff; font-weight: 800;
+  touch-action: none; -webkit-tap-highlight-color: transparent;
+  transition: transform 0.08s, filter 0.08s;
 }
-#touch button.active { background: rgba(255,255,255,0.35); }
-#touch .tdrift { font-size: 14px; background: rgba(196, 107, 255, 0.4); }
-#touch .tgas { background: rgba(60, 200, 90, 0.4); }
+#touch button.active { filter: brightness(1.7); transform: scale(0.92); }
+
+/* joystick = volant (gauche / droite) */
+#joy {
+  position: absolute; left: calc(24px + var(--sl)); bottom: calc(24px + var(--sb));
+  width: 190px; height: 100px; border-radius: 50px;
+  background: rgba(0,0,0,0.3); border: 2px solid rgba(255,255,255,0.45);
+  pointer-events: auto; touch-action: none;
+}
+#joy::before, #joy::after { position: absolute; top: 50%; transform: translateY(-50%); font-size: 18px; opacity: 0.6; }
+#joy::before { content: '◀'; left: 12px; }
+#joy::after { content: '▶'; right: 12px; }
+#joy.active { background: rgba(255,255,255,0.12); }
+#joyKnob {
+  position: absolute; left: 50%; top: 50%;
+  width: 76px; height: 76px; margin: -38px 0 0 -38px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #ffffff, #b9c3d6);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.5);
+  pointer-events: none;
+}
+
+/* pédales */
+#pedals {
+  position: absolute; right: calc(18px + var(--sr)); bottom: calc(18px + var(--sb));
+  display: flex; align-items: flex-end; gap: 12px; pointer-events: auto;
+}
+#pedals .tdrift { width: 74px; height: 74px; font-size: 14px; background: rgba(196, 107, 255, 0.45); }
+#pedals .tbrake { width: 66px; height: 66px; font-size: 24px; background: rgba(255, 80, 80, 0.35); }
+#pedals .tgas { width: 96px; height: 96px; font-size: 34px; background: rgba(60, 200, 90, 0.45); }
+
+/* outils : klaxon, caméra, replacer */
+#tools {
+  position: absolute; right: calc(18px + var(--sr)); bottom: calc(128px + var(--sb));
+  display: flex; gap: 10px; pointer-events: auto;
+}
+#tools button { width: 48px; height: 48px; font-size: 20px; }
+
+/* ===== Message "tourne ton téléphone" ===== */
+#rotate {
+  position: fixed; inset: 0; z-index: 50;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(5, 8, 20, 0.92); text-align: center; padding: 24px;
+}
+.rotBox { max-width: 320px; }
+.rotIcon { font-size: 64px; margin-bottom: 12px; animation: tilt 1.6s ease-in-out infinite; }
+@keyframes tilt { 0%, 30% { transform: rotate(0deg); } 60%, 100% { transform: rotate(-90deg); } }
+.rotBox p { font-size: 18px; line-height: 1.4; margin-bottom: 18px; }
+#rotateBtn {
+  padding: 12px 20px; border: none; border-radius: 10px; font-size: 16px; font-weight: 800;
+  background: rgba(255,255,255,0.15); color: #fff;
+}
 
 /* ===== Menus ===== */
 .overlay {
   position: fixed; inset: 0;
   display: flex; justify-content: center; align-items: flex-start;
-  overflow-y: auto; padding: 24px 12px;
+  overflow-y: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y;
+  padding: calc(24px + var(--st)) calc(12px + var(--sr)) calc(24px + var(--sb)) calc(12px + var(--sl));
   background: linear-gradient(90deg, rgba(5,8,20,0.85) 0%, rgba(5,8,20,0.55) 60%, rgba(5,8,20,0.2) 100%);
 }
 #pause { align-items: center; background: rgba(5,8,20,0.6); }
@@ -116,7 +174,7 @@ h1 span { color: #ffd23a; text-shadow: 0 0 20px rgba(255, 210, 58, 0.6); }
 .subtitle { text-align: center; opacity: 0.8; margin: 6px 0 14px; }
 h2 { font-size: 16px; margin: 14px 0 8px; opacity: 0.9; }
 
-.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); gap: 10px; }
 .card {
   background: rgba(255,255,255,0.06); border: 2px solid transparent;
   border-radius: 12px; padding: 10px; cursor: pointer; transition: 0.15s;
@@ -153,18 +211,57 @@ h2 { font-size: 16px; margin: 14px 0 8px; opacity: 0.9; }
 #menuBtn.secondary { background: rgba(255,255,255,0.12); color: #fff; box-shadow: none; font-size: 16px; }
 
 #records { text-align: center; margin-top: 12px; font-size: 14px; opacity: 0.9; }
+#assetStatus { text-align: center; margin-top: 6px; font-size: 12px; opacity: 0.7; }
 .help { margin-top: 14px; font-size: 13px; line-height: 1.6; opacity: 0.8; background: rgba(255,255,255,0.05); border-radius: 10px; padding: 10px 12px; }
+.credits { display: block; margin-top: 4px; font-size: 11px; opacity: 0.7; }
 
+/* ===== Petits écrans (ordinateur) ===== */
 @media (max-width: 700px) {
   h1 { font-size: 32px; }
   #minimap { width: 120px; height: 120px; top: 70px; bottom: auto; left: 10px; }
   #speed { font-size: 40px; }
   #turboBar { width: 120px; }
-  #speedBox { bottom: 180px; }
   #message { font-size: 28px; }
   #driftPoints { font-size: 36px; }
   .panel { min-width: 0; padding: 4px 8px; }
   .panel span:not(.label) { font-size: 15px; }
   #topLeft .panel:nth-child(3) { display: none; }
-  #hint { bottom: 170px; font-size: 12px; }
+}
+
+/* ===== Téléphone / tablette : HUD réorganisé autour des commandes ===== */
+body.touchUI #topLeft { top: calc(8px + var(--st)); left: calc(8px + var(--sl)); gap: 6px; }
+body.touchUI .panel { min-width: 0; padding: 3px 8px; border-radius: 8px; }
+body.touchUI .label { font-size: 9px; }
+body.touchUI .panel span:not(.label) { font-size: 14px; }
+body.touchUI #topLeft .panel:nth-child(3) { display: none; }
+body.touchUI #minimap { width: 110px; height: 110px; top: calc(60px + var(--st)); left: calc(10px + var(--sl)); bottom: auto; }
+body.touchUI #speedBox { top: calc(6px + var(--st)); right: calc(64px + var(--sr)); bottom: auto; }
+body.touchUI #speed { font-size: 30px; }
+body.touchUI .unit { font-size: 11px; margin-bottom: 3px; }
+body.touchUI #turboBar { width: 100px; height: 8px; }
+body.touchUI #pauseBtn { top: calc(8px + var(--st)); right: calc(8px + var(--sr)); width: 44px; height: 44px; }
+body.touchUI #missionPanel { top: calc(70px + var(--st)); right: calc(10px + var(--sr)); }
+body.touchUI #driftBox { top: calc(52px + var(--st)); }
+body.touchUI #driftLevel { font-size: 12px; }
+body.touchUI #driftPoints { font-size: 32px; }
+body.touchUI #driftMult { font-size: 15px; }
+body.touchUI #message { font-size: 24px; top: 30%; }
+body.touchUI #hint { top: calc(8px + var(--st)); bottom: auto; max-width: 44%; font-size: 11px; padding: 6px 10px; }
+body.touchUI h1 { font-size: 30px; }
+body.touchUI .menuBox { padding: 14px; }
+body.touchUI .subtitle { font-size: 13px; }
+body.touchUI #playBtn { padding: 12px; font-size: 20px; }
+
+/* téléphone tenu debout (si on joue quand même) */
+@media (orientation: portrait) {
+  body.touchUI #joy { width: 150px; height: 84px; left: calc(12px + var(--sl)); bottom: calc(16px + var(--sb)); }
+  body.touchUI #joyKnob { width: 62px; height: 62px; margin: -31px 0 0 -31px; }
+  body.touchUI #pedals { right: calc(10px + var(--sr)); bottom: calc(16px + var(--sb)); gap: 8px; }
+  body.touchUI #pedals .tdrift { width: 58px; height: 58px; font-size: 11px; }
+  body.touchUI #pedals .tbrake { width: 52px; height: 52px; font-size: 20px; }
+  body.touchUI #pedals .tgas { width: 74px; height: 74px; font-size: 28px; }
+  body.touchUI #tools { bottom: calc(104px + var(--sb)); right: calc(10px + var(--sr)); }
+  body.touchUI #tools button { width: 42px; height: 42px; font-size: 18px; }
+  body.touchUI #hint { top: auto; bottom: calc(180px + var(--sb)); max-width: 90%; }
+  body.touchUI #minimap { width: 100px; height: 100px; }
 }
