@@ -2,15 +2,40 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Snake - Mon jeu navigateur</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>Course 3D</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <h1>Snake</h1>
-  <p>Score : <span id="score">0</span></p>
-  <canvas id="game" width="400" height="400"></canvas>
-  <p class="help">Utilise les flèches du clavier pour jouer.</p>
-  <script src="game.js"></script>
+  <div id="hud">
+    <div>Tour <span id="lap">1/3</span></div>
+    <div>Temps <span id="time">0:00.00</span></div>
+    <div>Record <span id="best">--</span></div>
+  </div>
+  <div id="speed">0 <small>km/h</small></div>
+  <div id="msg"></div>
+  <div id="help">Flèches / ZQSD : conduire · Espace : frein à main · R : recommencer</div>
+
+  <div id="touch">
+    <div class="group">
+      <button data-k="left">◀</button>
+      <button data-k="right">▶</button>
+    </div>
+    <div class="group">
+      <button data-k="hand">⛔</button>
+      <button data-k="down">▼</button>
+      <button data-k="up">▲</button>
+    </div>
+  </div>
+
+  <div id="end" class="hidden">
+    <div class="box">
+      <h2 id="endTitle">Arrivée !</h2>
+      <div id="results"></div>
+      <button id="restart">Rejouer</button>
+    </div>
+  </div>
+
+  <script type="module" src="game.js"></script>
 </body>
 </html>

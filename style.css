@@ -1,15 +1,64 @@
-body {
-  background: #111;
-  color: #fff;
-  font-family: sans-serif;
-  text-align: center;
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; height: 100%; overflow: hidden; background: #000;
+  font-family: system-ui, sans-serif;
+  touch-action: none; user-select: none; -webkit-user-select: none;
+}
+canvas { display: block; }
+
+#hud {
+  position: fixed; top: 12px; left: 12px; color: #fff;
+  background: rgba(0,0,0,.45); padding: 10px 14px; border-radius: 10px;
+  font-size: 16px; line-height: 1.6;
+}
+#hud span { font-weight: bold; font-variant-numeric: tabular-nums; }
+
+#speed {
+  position: fixed; top: 12px; right: 12px; color: #fff;
+  background: rgba(0,0,0,.45); padding: 10px 14px; border-radius: 10px;
+  font-size: 28px; font-weight: bold; font-variant-numeric: tabular-nums;
+}
+#speed small { font-size: 14px; font-weight: normal; }
+
+#msg {
+  position: fixed; top: 35%; left: 50%; transform: translate(-50%, -50%);
+  color: #fff; font-size: 72px; font-weight: 900;
+  text-shadow: 0 4px 12px rgba(0,0,0,.6);
+  opacity: 0; transition: opacity .3s; pointer-events: none; white-space: nowrap;
 }
 
-canvas {
-  background: #222;
-  border: 2px solid #0f0;
+#help {
+  position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%);
+  color: #fff; background: rgba(0,0,0,.4); padding: 6px 12px; border-radius: 8px;
+  font-size: 13px; white-space: nowrap;
 }
 
-.help {
-  color: #aaa;
+#touch {
+  display: none; position: fixed; bottom: 20px; left: 0; right: 0;
+  justify-content: space-between; padding: 0 20px; pointer-events: none;
+}
+#touch .group { display: flex; gap: 12px; pointer-events: auto; }
+#touch button {
+  width: 72px; height: 72px; border-radius: 50%; border: none;
+  background: rgba(255,255,255,.3); color: #fff; font-size: 28px; touch-action: none;
+}
+#touch button:active { background: rgba(255,255,255,.55); }
+@media (pointer: coarse) {
+  #touch { display: flex; }
+  #help { display: none; }
+}
+
+#end {
+  position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,.55);
+}
+#end.hidden { display: none; }
+#end .box {
+  background: #fff; padding: 24px 32px; border-radius: 14px; text-align: center; min-width: 260px;
+}
+#end h2 { margin: 0 0 12px; }
+#results { line-height: 1.7; margin-bottom: 16px; font-variant-numeric: tabular-nums; }
+#restart {
+  font-size: 18px; padding: 10px 24px; border: none; border-radius: 8px;
+  background: #e63946; color: #fff; cursor: pointer;
 }
