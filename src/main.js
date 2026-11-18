@@ -24,6 +24,7 @@ import { loadCharacters, attachHero, updateHeroModel } from './npc/characters.js
 import { hero, focusPos, updateHero } from './gameplay/onfoot.js';
 import { updateWeapons } from './gameplay/weapons.js';
 import { initPolice, updatePolice, crime, wanted } from './gameplay/police.js';
+import { initShops, updateShops } from './gameplay/shops.js';
 import { updateParticles } from './fx/particles.js';
 import { updateDestruction } from './fx/destruction.js';
 import { resetCoins, updateCoins } from './gameplay/coins.js';
@@ -34,6 +35,7 @@ import { updateHUD, refreshStats } from './ui/hud.js';
 import { readInput } from './ui/input.js';
 import { buildMenu, checkRotate } from './ui/menu.js';
 import { drawMapBase, drawMinimap } from './ui/minimap.js';
+import { initBigMap } from './ui/bigmap.js';
 
 // =====================================================
 //  1) DÉMARRAGE
@@ -45,7 +47,11 @@ buildCity();
 initPlanes();           // aéroport, avions à piloter, avions de ligne
 try { initDecor(); }    // boutiques, terrasses, pubs, abribus, dirigeable...
 catch (e) { console.warn('Décor non chargé :', e); }
+try { initShops(); }    // boutiques où l'on peut entrer (vêtements, armes, nourriture)
+catch (e) { console.warn('Boutiques non chargées :', e); }
 drawMapBase();
+try { initBigMap(); }   // grande carte de tout le monde (touche M)
+catch (e) { console.warn('Grande carte non chargée :', e); }
 G.peds = createPedestrians({
   scene, N, BLOCK, CELL, blockCenter, colliders,
   count: isMobile ? 28 : 64,   // moins de piétons sur téléphone
@@ -200,6 +206,7 @@ function update(dt, t) {
     updateDestruction(dt);                 // explosions, débris, arbres qui tombent
     updateParticles(dt);                   // fumée, étincelles, flammes
     updateCoins(dt, t);
+    updateShops(dt);                       // entrer dans une boutique (cercle devant la porte)
     updateMission(dt);
     animateMission(dt, t);
     updateDecor(dt);                       // dirigeable et montgolfières
@@ -218,7 +225,7 @@ function update(dt, t) {
     updateDecor(dt);
     updateMenuCamera(dt);
   }
-  // en pause : rien ne bouge, on redessine juste l'image
+  // en pause (ou dans une boutique / sur la grande carte) : rien ne bouge, on redessine juste l'image
 }
 
 // Une erreur ne doit pas figer tout le jeu : on l'affiche (une seule fois)

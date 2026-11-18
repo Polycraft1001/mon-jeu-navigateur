@@ -1,11 +1,18 @@
 // =====================================================
 //  ARMES : poings, pistolet, mitraillette, fusil à pompe,
-//  lance-roquettes. Visée automatique (anneau rouge),
-//  tirs instantanés (rayons) et roquettes qui explosent.
+//  lance-roquettes.
+//   - en voiture, en avion et sur téléphone : visée
+//     automatique (anneau rouge sur la cible la plus proche)
+//   - à pied sur ordinateur (souris capturée) : on vise à la
+//     souris, avec le viseur au centre de l'écran (voir aim.js)
+//  Tirs instantanés (rayons) et roquettes qui explosent.
+//  Au début on a seulement les poings et le pistolet :
+//  les autres armes s'achètent à l'armurerie 🔫 (shops.js).
 //  Attention : tirer en ville ou toucher quelqu'un
 //  fait venir la police (gameplay/police.js) !
 //  ➜ Ajouter une arme : core/config.js (WEAPONS)
 //     + son modèle 3D dans gameplay/onfoot.js (gun(...))
+//     + son prix dans gameplay/shops.js (GUN_PRICES)
 // =====================================================
 import * as THREE from 'three';
 import { scene, camera } from '../render/engine.js';
@@ -20,11 +27,32 @@ import { emit, burst } from '../fx/particles.js';
 import { muzzleFlash, explode, breakProp } from '../fx/destruction.js';
 import { hero, heroMuzzle, showWeapon } from './onfoot.js';
 import { cops, rayCops, hitCop, blastCops, crime, reportShot } from './police.js';
+import { mouseLook } from './aim.js';
 import { sfx } from '../ui/audio.js';
 import { showMessage } from '../ui/hud.js';
 
-export const arms = { cool: 0, trigger: false, target: null };
+export const arms = { cool: 0, trigger: false, target: null, mouse: false };
 const ROCKET_SPEED = 60;
+
+// ----- Les armes qu'on possède (gardées dans la sauvegarde) -----
+if (!Array.isArray(save.guns)) save.guns = WEAPONS.filter((w) => w.melee || w.id === 'pistol').map((w) => w.id);
+export const ownsWeapon = (i) => {
+  const w = WEAPONS[i];
+  return !!w && (w.melee || w.id === 'pistol' || save.guns.includes(w.id));
+};
+export function giveWeapon(i) {
+  const w = WEAPONS[i];
+  if (!w || save.guns.includes(w.id)) return;
+  save.guns.push(w.id);
+  persist();
+}
+// l'arme en main n'est pas (encore) achetée : on reprend le pistolet
+if (WEAPONS[save.weapon] && !ownsWeapon(save.weapon)) {
+  const p = WEAPONS.findIndex((w) => w.id === 'pistol');
+  save.weapon = p >= 0 ? p : 0;
+  persist();
+  showWeapon(WEAPONS[save.weapon].id);
+}
 
 export const currentWeapon = () => WEAPONS[save.weapon] || WEAPONS[0];
 // en voiture on ne peut pas donner de coups de poing : on tire au pistolet
@@ -33,14 +61,28 @@ const usedWeapon = () => { const w = currentWeapon(); return G.mode === 'car' &&
 export function selectWeapon(i) {
   const n = WEAPONS.length;
   i = ((i % n) + n) % n;
-  if (i === save.weapon) return;
+  if (i === save.weapon) return true;
+  if (!ownsWeapon(i)) { // pas encore achetée
+    const w = WEAPONS[i];
+    showMessage('🔒 ' + w.icon + ' ' + w.name + ' : en vente à l\'armurerie 🔫', '#ffd23a', 1.8);
+    sfx('click', 0.25);
+    return false;
+  }
   save.weapon = i; persist();
   arms.cool = Math.max(arms.cool, 0.15);
   showWeapon(WEAPONS[i].id);
   sfx('click', 0.4);
   showMessage(WEAPONS[i].icon + ' ' + WEAPONS[i].name, '#ffffff', 0.9);
+  return true;
 }
-export const nextWeapon = (d = 1) => selectWeapon(save.weapon + d);
+// arme suivante / précédente (on saute celles qu'on n'a pas)
+export function nextWeapon(d = 1) {
+  const n = WEAPONS.length, s = d < 0 ? -1 : 1;
+  for (let k = 1; k < n; k++) {
+    const i = (((save.weapon + s * k) % n) + n) % n;
+    if (ownsWeapon(i)) { selectWeapon(i); return; }
+  }
+}
 export const setTrigger = (on) => { arms.trigger = !!on; };
 
 // ----- Lancer de rayon (les balles vont tout droit, instantanément) -----
@@ -122,6 +164,38 @@ const ring = new THREE.Mesh(
 );
 ring.renderOrder = 999; ring.visible = false;
 scene.add(ring);
+
+// ----- Visée à la souris : ce qu'il y a au centre de l'écran -----
+const LIVE = { ped: true, cop: true, car: true }; // cibles qui font rougir le viseur
+const _cam = new THREE.Vector3();
+const _so = { x: 0, y: 0, z: 0 };
+const _st = { x: 0, y: 0, z: 0, kind: 'none' };
+function screenTarget() {
+  camera.getWorldDirection(_cam);
+  const p = camera.position;
+  // le rayon suit la ligne de visée de la caméra, mais part à hauteur du héros
+  // (on ignore ce qui se trouve entre la caméra et le héros)
+  const k = Math.max(0, (hero.pos.x - p.x) * _cam.x + (hero.pos.y + 1.4 - p.y) * _cam.y + (hero.pos.z - p.z) * _cam.z);
+  _so.x = p.x + _cam.x * k; _so.y = p.y + _cam.y * k; _so.z = p.z + _cam.z * k;
+  const h = castRay(_so, _cam, 250, false);
+  _st.x = h.x; _st.y = h.y; _st.z = h.z; _st.kind = h.kind;
+  return _st;
+}
+
+// ----- Viseur au centre de l'écran (blanc, rouge sur une cible) -----
+const cross = document.createElement('div');
+cross.style.cssText = 'position:fixed;left:50%;top:50%;width:26px;height:26px;margin:-13px 0 0 -13px;pointer-events:none;z-index:40;display:none;color:#ffffff;filter:drop-shadow(0 0 2px rgba(0,0,0,.9))';
+cross.innerHTML = '<svg viewBox="0 0 26 26" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">'
+  + '<circle cx="13" cy="13" r="8"/><path d="M13 1v5M13 20v5M1 13h5M20 13h5"/>'
+  + '<circle cx="13" cy="13" r="1.4" fill="currentColor" stroke="none"/></svg>';
+document.body.appendChild(cross);
+let crossOn = false, crossRed = false;
+function setCross(on, red) {
+  if (on !== crossOn) { crossOn = on; cross.style.display = on ? 'block' : 'none'; }
+  if (on && red !== crossRed) { crossRed = red; cross.style.color = red ? '#ff3040' : '#ffffff'; }
+}
+// souris libérée (Échap, pause, boutique...) : on cache le viseur
+document.addEventListener('pointerlockchange', () => { if (!document.pointerLockElement) setCross(false, false); });
 
 // ----- Traînées des balles -----
 const tracerGeo = new THREE.BoxGeometry(1, 1, 1); tracerGeo.translate(0, 0, 0.5);
@@ -217,9 +291,16 @@ function shooter() {
 const _d = new THREE.Vector3();
 function fire(w, s) {
   const t = arms.target;
-  if (t) _d.set(t.x - s.x, t.y - s.y, t.z - s.z).normalize();
-  else _d.set(-Math.sin(s.h), s.car ? 0 : -0.02, -Math.cos(s.h)).normalize();
-  if (!s.car) { hero.h = Math.atan2(-_d.x, -_d.z); hero.aimT = 1.5; } // le héros se tourne vers la cible
+  if (t) _d.set(t.x - s.x, t.y - s.y, t.z - s.z);
+  if (!t || _d.lengthSq() < 1) { // pas de cible (ou collée à nous) : tout droit
+    if (arms.mouse) camera.getWorldDirection(_d);
+    else _d.set(-Math.sin(s.h), s.car ? 0 : -0.02, -Math.cos(s.h));
+  }
+  _d.normalize();
+  if (!s.car) { // le héros se tourne vers la cible (à la souris, c'est la souris qui le tourne)
+    if (!arms.mouse) hero.h = Math.atan2(-_d.x, -_d.z);
+    hero.aimT = 1.5;
+  }
   const m = s.car ? s : heroMuzzle();
   const n = w.pellets || 1;
   for (let i = 0; i < n; i++) {
@@ -252,13 +333,13 @@ function punch(w) {
   }
   if (cop) {
     const dx = cop.x - hero.pos.x, dz = cop.z - hero.pos.z, L = Math.hypot(dx, dz) || 1;
-    hero.h = Math.atan2(-dx, -dz);
+    if (!arms.mouse) hero.h = Math.atan2(-dx, -dz);
     hitCop(cop, w.dmg || 10, dx / L, dz / L, w.force);
     burst(cop.x, cop.y + 1.3, cop.z, '#ffffff', 4, 2, false);
     sfx('punch', 0.6);
     return;
   }
-  // on se tourne vers le piéton le plus proche devant soi
+  // on vise le piéton le plus proche devant soi
   if (G.peds) {
     let best = null, bd = 2.6;
     for (const p of G.peds.list) {
@@ -266,7 +347,11 @@ function punch(w) {
       const dx = p.x - hero.pos.x, dz = p.z - hero.pos.z, d = Math.hypot(dx, dz);
       if (d < bd && (dx * fx + dz * fz) / (d || 1) > 0.4) { bd = d; best = p; }
     }
-    if (best) { hero.h = Math.atan2(-(best.x - hero.pos.x), -(best.z - hero.pos.z)); fx = -Math.sin(hero.h); fz = -Math.cos(hero.h); }
+    if (best) {
+      const a = Math.atan2(-(best.x - hero.pos.x), -(best.z - hero.pos.z));
+      if (!arms.mouse) hero.h = a;
+      fx = -Math.sin(a); fz = -Math.cos(a);
+    }
   }
   _d.set(fx, 0, fz);
   const o = { x: hero.pos.x, y: hero.pos.y + 1.2, z: hero.pos.z };
@@ -293,14 +378,25 @@ export function updateWeapons(dt) {
   updateRockets(dt);
   const s = G.state === 'play' ? shooter() : null;
   const w = usedWeapon();
-  arms.target = s && !w.melee ? findTarget(s, s.h, Math.min(w.range, 90), s.car ? 0.2 : 0.32) : null;
-  if (arms.target) {
+  arms.mouse = !!s && !s.car && mouseLook(); // à pied + souris capturée
+  let locked = false;
+  if (arms.mouse) {
+    // on tire là où pointe le viseur (centre de l'écran)
+    arms.target = w.melee ? null : screenTarget();
+    locked = !!arms.target && !!LIVE[arms.target.kind];
+    if (!w.melee) hero.aimT = Math.max(hero.aimT, 0.15); // il garde son arme levée
+  } else {
+    arms.target = s && !w.melee ? findTarget(s, s.h, Math.min(w.range, 90), s.car ? 0.2 : 0.32) : null;
+    locked = !!arms.target;
+  }
+  if (locked) {
     const t = arms.target;
     ring.visible = true;
     ring.position.set(t.x, t.y, t.z);
     ring.quaternion.copy(camera.quaternion);
-    ring.scale.setScalar(1 + 0.12 * Math.sin(performance.now() / 90));
+    ring.scale.setScalar((arms.mouse ? 0.6 : 1) + 0.12 * Math.sin(performance.now() / 90));
   } else ring.visible = false;
+  setCross(arms.mouse, locked);
   if (s && arms.trigger && arms.cool <= 0) {
     arms.cool = w.rate;
     if (w.melee) punch(w); else fire(w, s);
@@ -308,8 +404,9 @@ export function updateWeapons(dt) {
 }
 
 export function resetWeapons() {
-  arms.trigger = false; arms.cool = 0; arms.target = null;
+  arms.trigger = false; arms.cool = 0; arms.target = null; arms.mouse = false;
   ring.visible = false;
+  setCross(false, false);
   for (const t of tracers) { t.life = 0; t.m.visible = false; }
   for (const r of rockets) { r.on = false; r.m.visible = false; }
 }

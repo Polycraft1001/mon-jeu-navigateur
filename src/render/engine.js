@@ -135,9 +135,11 @@ export const cloudMat = new THREE.MeshLambertMaterial({ color: 0xffffff, fog: fa
 }
 scene.add(clouds);
 
+// Montagnes lointaines (décor) : placées AU-DELÀ du bord du monde,
+// pour ne plus cacher les 3 autres villes (qui sont à ~900 m du centre)
 export const mountainMat = new THREE.MeshLambertMaterial({ color: 0x7f93a3, flatShading: true });
 for (let i = 0; i < 40; i++) {
-  const a = (i / 40) * Math.PI * 2 + rr(-0.05, 0.05), d = rr(850, 1100), h = rr(150, 380);
+  const a = (i / 40) * Math.PI * 2 + rr(-0.05, 0.05), d = rr(1600, 1900), h = rr(150, 380);
   const m = new THREE.Mesh(new THREE.ConeGeometry(rr(150, 280), h, 6), mountainMat);
   m.position.set(Math.cos(a) * d, h / 2 - 10, Math.sin(a) * d);
   scene.add(m);
