@@ -2,6 +2,8 @@
 //  CAMÉRA : derrière la voiture, derrière le héros,
 //  ou qui tourne autour de la voiture dans le menu.
 //  C / V / 🎥 = changer de vue (3 vues)
+//  À pied avec la souris capturée : la caméra suit la souris
+//  (gauche / droite ET haut / bas), par-dessus l'épaule.
 // =====================================================
 import { camera } from './engine.js';
 import { G } from '../core/ctx.js';
@@ -9,6 +11,7 @@ import { clamp, lerp, damp, angleDiff } from '../core/utils.js';
 import { colliders } from '../world/city.js';
 import { player, drive } from '../vehicles/driving.js';
 import { hero } from '../gameplay/onfoot.js';
+import { mouseLook, aim } from '../gameplay/aim.js';
 
 // d = distance derrière · h = hauteur · look = hauteur du regard · side = décalage épaule
 const CAR_VIEWS = [{ d: 8.5, h: 3.4, look: 1.2 }, { d: 14, h: 6, look: 1.6 }]; // 3e vue = capot
@@ -18,6 +21,7 @@ const FOOT_VIEWS = [
   { d: 2.6, h: 1.9, look: 1.65, side: 0.7 },
 ];
 let menuAngle = 0;
+let pitchS = 0; // visée haut / bas (adoucie)
 
 // est-ce que ce point est dans un immeuble ?
 function inBuilding(x, y, z) {
@@ -61,16 +65,21 @@ function carCamera(dt) {
 function footCamera(dt) {
   const V = FOOT_VIEWS[G.camMode % FOOT_VIEWS.length];
   const p = hero.pos;
-  G.camHeading += angleDiff(G.camHeading, hero.h) * damp(hero.state === 'ok' ? 5 : 1.5, dt);
+  const look = mouseLook();
+  // souris : la caméra suit tout de suite · sinon : elle suit doucement
+  if (look && hero.state === 'ok') G.camHeading = hero.h;
+  else G.camHeading += angleDiff(G.camHeading, hero.h) * damp(hero.state === 'ok' ? 5 : 1.5, dt);
+  pitchS = lerp(pitchS, look ? aim.pitch : 0, damp(14, dt));
+  const side = look ? Math.max(V.side, 0.6) : V.side; // par-dessus l'épaule pour bien voir le viseur
   const s = Math.sin(G.camHeading), c = Math.cos(G.camHeading);
   // point visé (épaule) puis position voulue derrière
-  const ax = p.x + c * V.side, ay = p.y + V.look, az = p.z - s * V.side;
-  const bx = ax + s * V.d, by = p.y + V.h, bz = az + c * V.d;
+  const ax = p.x + c * side, ay = p.y + V.look, az = p.z - s * side;
+  const bx = ax + s * V.d, by = Math.max(p.y + 0.5, p.y + V.h - pitchS * 2.4), bz = az + c * V.d;
   const k = unblock(ax, ay, az, bx, by, bz);
   camera.position.x = ax + (bx - ax) * k;
   camera.position.z = az + (bz - az) * k;
   camera.position.y = lerp(camera.position.y, ay + (by - ay) * k, damp(8, dt));
-  camera.lookAt(ax - s * 6, ay, az - c * 6);
+  camera.lookAt(ax - s * 6, ay + pitchS * 6, az - c * 6);
   const fovT = 62 + (Math.abs(hero.speed) > 6 ? 5 : 0);
   camera.fov = lerp(camera.fov, fovT, damp(3, dt));
 }
