@@ -1,12 +1,15 @@
 // =====================================================
-//  MODÈLES 3D DES VOITURES
+//  MODÈLES 3D DES VOITURES — style « jouet » 🍬
+//  carrosseries arrondies, phares tout ronds (comme des yeux),
+//  grosses roues et couleurs bonbon
 //  ➜ Nouvelle forme de voiture : ajoute-la dans CAR_SHAPES
-//    (formes en boîtes) ou dans LUXURY (vehicles/luxury.js,
+//    (formes arrondies) ou dans LUXURY (vehicles/luxury.js,
 //    vraies silhouettes), puis utilise son nom (style) dans core/config.js
 // =====================================================
 import * as THREE from 'three';
 import { envMats, getEnvMap } from '../render/engine.js';
 import { box } from '../core/utils.js';
+import { rbox } from '../core/shapes.js';
 import { LUXURY, buildLuxury } from './luxury.js';
 
 export const CAR_SHAPES = {
@@ -27,6 +30,15 @@ envMats.push(rimMat);
 const darkMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.7 });
 // carcasse brûlée (épave)
 export const burntMat = new THREE.MeshStandardMaterial({ color: 0x1d1b1a, roughness: 1, metalness: 0.2 });
+
+// petite lumière toute ronde (phares « yeux », feux arrière)
+const bulbGeo = new THREE.SphereGeometry(1, 14, 10);
+function bulb(mat, x, y, z, rx, ry, rz, parent) {
+  const m = new THREE.Mesh(bulbGeo, mat);
+  m.position.set(x, y, z); m.scale.set(rx, ry, rz);
+  parent.add(m);
+  return m;
+}
 
 // Une voiture = { root, chassis, wheels, fronts, paint, glass, headMat, tailMat, spot, S, spin, envList }
 // root bouge et tourne, chassis penche, wheels tournent, fronts braquent
@@ -55,44 +67,52 @@ export function addSpot(root, y, L) {
 }
 
 export function buildCar(style, color) {
-  if (LUXURY[style]) return buildLuxury(style, color); // voitures de luxe
+  if (LUXURY[style]) { // voitures de luxe : un peu plus « dodues », façon jouet
+    const car = buildLuxury(style, color);
+    if (car && car.chassis) car.chassis.scale.set(1.04, 1.1, 0.96);
+    return car;
+  }
   const S = CAR_SHAPES[style] || CAR_SHAPES.gt;
   const root = new THREE.Group(); root.rotation.order = 'YXZ';
   const chassis = new THREE.Group(); chassis.rotation.order = 'YXZ';
   root.add(chassis);
   const env = getEnvMap();
-  const paint = new THREE.MeshPhysicalMaterial({ color, metalness: 0.5, roughness: 0.3, clearcoat: 1, clearcoatRoughness: 0.08, envMap: env });
+  const paint = new THREE.MeshPhysicalMaterial({ color, metalness: 0.35, roughness: 0.28, clearcoat: 1, clearcoatRoughness: 0.06, envMap: env });
   const glass = new THREE.MeshPhysicalMaterial({ color: 0x0b1622, metalness: 0.3, roughness: 0.05, clearcoat: 1, envMap: env });
   const headMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff4d6, emissiveIntensity: 1 });
   const tailMat = new THREE.MeshStandardMaterial({ color: 0x550000, emissive: 0xff1a1a, emissiveIntensity: 0.6 });
-  const b = 0.38;
-  box(S.W, S.H, S.L, paint, 0, b + S.H / 2, 0, chassis);
-  box(S.W * 0.98, 0.2, 0.3, darkMat, 0, b + 0.1, -S.L / 2 - 0.05, chassis);
-  box(S.W * 0.98, 0.2, 0.3, darkMat, 0, b + 0.1, S.L / 2 + 0.05, chassis);
-  const cabY = b + S.H + S.cabH / 2;
-  box(S.cabW, S.cabH, S.cabL, glass, 0, cabY, S.cabZ, chassis);
-  box(S.cabW * 0.98, 0.07, S.cabL * 0.7, paint, 0, cabY + S.cabH / 2 + 0.03, S.cabZ + 0.1, chassis);
+  const b = 0.42;
+  // carrosserie toute ronde + pare-chocs arrondis
+  rbox(S.W, S.H, S.L, paint, 0, b + S.H / 2, 0, chassis, Math.min(0.3, S.H * 0.4));
+  rbox(S.W * 0.96, 0.24, 0.34, darkMat, 0, b + 0.12, -S.L / 2 - 0.02, chassis, 0.11);
+  rbox(S.W * 0.96, 0.24, 0.34, darkMat, 0, b + 0.12, S.L / 2 + 0.02, chassis, 0.11);
+  // cabine en bulle de verre (un peu enfoncée dans la carrosserie) + toit
+  const cabH = S.cabH + 0.08, cabY = b + S.H + cabH / 2 - 0.08;
+  rbox(S.cabW, cabH, S.cabL, glass, 0, cabY, S.cabZ, chassis, Math.min(0.24, cabH * 0.42));
+  rbox(S.cabW * 0.9, 0.12, S.cabL * 0.72, paint, 0, cabY + cabH / 2 - 0.02, S.cabZ + 0.1, chassis, 0.05);
+  // phares ronds (les « yeux ») et feux arrière ronds
   for (const sx of [-1, 1]) {
-    box(0.5, 0.16, 0.06, headMat, sx * (S.W / 2 - 0.38), b + S.H * 0.62, -S.L / 2 - 0.02, chassis, false);
-    box(0.5, 0.14, 0.06, tailMat, sx * (S.W / 2 - 0.38), b + S.H * 0.62, S.L / 2 + 0.02, chassis, false);
+    bulb(headMat, sx * (S.W / 2 - 0.42), b + S.H * 0.6, -S.L / 2 + 0.02, 0.2, 0.2, 0.1, chassis);
+    bulb(tailMat, sx * (S.W / 2 - 0.4), b + S.H * 0.6, S.L / 2 - 0.02, 0.17, 0.12, 0.08, chassis);
   }
   if (S.spoiler) {
     const sw = S.W * 0.95, sh = 0.35 + S.spoiler * 0.25;
-    box(sw, 0.08, 0.45, paint, 0, b + S.H + sh, S.L / 2 - 0.25, chassis);
-    for (const sx of [-1, 1]) box(0.08, sh, 0.12, darkMat, sx * sw * 0.35, b + S.H + sh / 2, S.L / 2 - 0.25, chassis);
+    rbox(sw, 0.1, 0.5, paint, 0, b + S.H + sh, S.L / 2 - 0.25, chassis, 0.045);
+    for (const sx of [-1, 1]) rbox(0.1, sh, 0.14, darkMat, sx * sw * 0.35, b + S.H + sh / 2, S.L / 2 - 0.25, chassis, 0.045);
   }
-  if (S.scoop) box(0.7, 0.18, 0.9, darkMat, 0, b + S.H + 0.09, -S.L / 2 + 1.1, chassis);
-  if (S.roofLights) for (const sx of [-0.45, -0.15, 0.15, 0.45]) box(0.22, 0.16, 0.12, headMat, sx, cabY + S.cabH / 2 + 0.15, S.cabZ - 0.5, chassis, false);
+  if (S.scoop) rbox(0.7, 0.2, 0.9, darkMat, 0, b + S.H + 0.06, -S.L / 2 + 1.1, chassis, 0.09);
+  if (S.roofLights) for (const sx of [-0.45, -0.15, 0.15, 0.45]) bulb(headMat, sx, cabY + cabH / 2 + 0.1, S.cabZ - 0.5, 0.11, 0.09, 0.07, chassis);
   const wheels = [], fronts = [];
-  addWheels(root, S.W, S.L, wheels, fronts, true);
+  addWheels(root, S.W, S.L, wheels, fronts, true, 1.12);
   const spot = addSpot(root, 1.0, S.L);
-  return { root, chassis, wheels, fronts, paint, glass, headMat, tailMat, spot, S, spin: -1, envList: [paint, glass], top: b + S.H + S.cabH };
+  return { root, chassis, wheels, fronts, paint, glass, headMat, tailMat, spot, S, spin: -1, envList: [paint, glass], top: b + S.H + S.cabH + 0.1 };
 }
 
 // ----- Voitures de la circulation (même structure, plus simples) -----
-const TRAFFIC_COLORS = ['#c0392b', '#2c3e50', '#ecf0f1', '#7f8c8d', '#2980b9', '#16a085', '#8e44ad', '#d35400', '#111111'];
-const trafficMats = TRAFFIC_COLORS.map((c) => { const m = new THREE.MeshStandardMaterial({ color: c, roughness: 0.4, metalness: 0.3, envMap: getEnvMap() }); envMats.push(m); return m; });
-const taxiMat = new THREE.MeshStandardMaterial({ color: '#f5c518', roughness: 0.4, metalness: 0.3, envMap: getEnvMap() }); envMats.push(taxiMat);
+// couleurs bonbon 🍬
+const TRAFFIC_COLORS = ['#ff7eb6', '#7fe0c4', '#b79bff', '#ffd84d', '#6fc3ff', '#ff9f6e', '#ffffff', '#ff5c8a', '#8be04e', '#5a6cff'];
+const trafficMats = TRAFFIC_COLORS.map((c) => { const m = new THREE.MeshStandardMaterial({ color: c, roughness: 0.35, metalness: 0.15, envMap: getEnvMap() }); envMats.push(m); return m; });
+const taxiMat = new THREE.MeshStandardMaterial({ color: '#ffd23a', roughness: 0.35, metalness: 0.15, envMap: getEnvMap() }); envMats.push(taxiMat);
 const tGlass = new THREE.MeshStandardMaterial({ color: 0x101820, roughness: 0.1, metalness: 0.5, envMap: getEnvMap() }); envMats.push(tGlass);
 export const tHead = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff0c0, emissiveIntensity: 0.8 });
 export const tTail = new THREE.MeshStandardMaterial({ color: 0x440000, emissive: 0xff2020, emissiveIntensity: 0.6 });
@@ -106,20 +126,21 @@ export function buildTrafficCar() {
   const paint = taxi ? taxiMat : trafficMats[Math.floor(Math.random() * trafficMats.length)];
   const L = van ? 5 : 4.3, W = van ? 2.1 : 1.9;
   if (van) {
-    box(W, 1.9, L, paint, 0, 1.3, 0, chassis);
-    box(W * 0.96, 0.6, 0.1, tGlass, 0, 1.75, -L / 2 - 0.01, chassis, false);
+    rbox(W, 1.9, L, paint, 0, 1.3, 0, chassis, 0.45);
+    rbox(W - 1.0, 0.5, 0.14, tGlass, 0, 1.62, -L / 2 + 0.02, chassis, 0.06, false);
   } else {
-    box(W, 0.7, L, paint, 0, 0.7, 0, chassis);
-    box(W * 0.85, 0.6, 2.2, tGlass, 0, 1.35, 0.2, chassis);
-    if (taxi) box(0.8, 0.25, 0.35, tHead, 0, 1.78, 0.2, chassis, false);
+    rbox(W, 0.72, L, paint, 0, 0.72, 0, chassis, 0.3);
+    rbox(W * 0.84, 0.66, 2.2, tGlass, 0, 1.3, 0.2, chassis, 0.24);
+    if (taxi) rbox(0.8, 0.26, 0.36, tHead, 0, 1.72, 0.2, chassis, 0.1, false);
   }
+  const ly = van ? 0.85 : 0.8;
   for (const sx of [-1, 1]) {
-    box(0.4, 0.15, 0.05, tHead, sx * (W / 2 - 0.3), 0.85, -L / 2 - 0.02, chassis, false);
-    box(0.4, 0.15, 0.05, tTail, sx * (W / 2 - 0.3), 0.85, L / 2 + 0.02, chassis, false);
+    bulb(tHead, sx * (W / 2 - 0.38), ly, -L / 2 + 0.03, 0.17, 0.17, 0.09, chassis);
+    bulb(tTail, sx * (W / 2 - 0.36), ly, L / 2 - 0.03, 0.14, 0.11, 0.07, chassis);
   }
   const wheels = [], fronts = [];
-  addWheels(root, W, L, wheels, fronts, false);
-  return { root, chassis, wheels, fronts, paint, glass: tGlass, headMat: tHead, tailMat: tTail, spot: null, S: { L, W, H: van ? 1.9 : 0.7 }, spin: -1, envList: [], traffic: true, top: van ? 2.25 : 1.6 };
+  addWheels(root, W, L, wheels, fronts, false, 1.1);
+  return { root, chassis, wheels, fronts, paint, glass: tGlass, headMat: tHead, tailMat: tTail, spot: null, S: { L, W, H: van ? 1.9 : 0.72 }, spin: -1, envList: [], traffic: true, top: van ? 2.25 : 1.6 };
 }
 
 // Une voiture volée devient "à nous" : ses matériaux deviennent uniques

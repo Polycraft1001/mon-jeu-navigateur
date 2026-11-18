@@ -10,16 +10,19 @@ import * as THREE from 'three';
 
 const cache = new Map();
 // w, h, d = taille · r = rayon des coins arrondis
+// (les coordonnées de texture suivent la vraie forme :
+//  les fenêtres des immeubles ne sont pas déformées)
 export function roundBox(w, h, d, r, seg = 3) {
   r = Math.max(0, Math.min(r, w / 2 - 0.01, h / 2 - 0.01, d / 2 - 0.01));
   const key = [w, h, d, r].map((v) => v.toFixed(2)).join('_') + '_' + seg;
   if (cache.has(key)) return cache.get(key);
   const n = 2 * seg + 2, H = n / 2;
   const g = new THREE.BoxGeometry(1, 1, 1, n, n, n);
-  const P = g.attributes.position, N = g.attributes.normal;
+  const P = g.attributes.position, N = g.attributes.normal, U = g.attributes.uv;
   const half = [w / 2, h / 2, d / 2], p = [0, 0, 0], c = [0, 0, 0], s = [0, 0, 0];
   for (let i = 0; i < P.count; i++) {
     s[0] = P.getX(i); s[1] = P.getY(i); s[2] = P.getZ(i);
+    const nx = N.getX(i), ny = N.getY(i), nz = N.getZ(i); // face d'origine
     for (let j = 0; j < 3; j++) {
       const k = Math.round(Math.abs(s[j]) * n);
       const lim = half[j] - r;
@@ -27,12 +30,22 @@ export function roundBox(w, h, d, r, seg = 3) {
       p[j] = s[j] < 0 ? -v : v;
       c[j] = Math.max(-lim, Math.min(lim, p[j]));
     }
+    let fx = p[0], fy = p[1], fz = p[2];
     const dx = p[0] - c[0], dy = p[1] - c[1], dz = p[2] - c[2], len = Math.hypot(dx, dy, dz);
     if (r > 0 && len > 1e-6) {
       const a = 1 / len;
-      P.setXYZ(i, c[0] + dx * a * r, c[1] + dy * a * r, c[2] + dz * a * r);
+      fx = c[0] + dx * a * r; fy = c[1] + dy * a * r; fz = c[2] + dz * a * r;
       N.setXYZ(i, dx * a, dy * a, dz * a);
-    } else P.setXYZ(i, p[0], p[1], p[2]);
+    }
+    P.setXYZ(i, fx, fy, fz);
+    // texture « à plat » sur chaque face (même sens que BoxGeometry)
+    const qx = fx / w, qy = fy / h, qz = fz / d;
+    if (nx > 0.5) U.setXY(i, 0.5 - qz, 0.5 + qy);
+    else if (nx < -0.5) U.setXY(i, 0.5 + qz, 0.5 + qy);
+    else if (ny > 0.5) U.setXY(i, 0.5 + qx, 0.5 - qz);
+    else if (ny < -0.5) U.setXY(i, 0.5 + qx, 0.5 + qz);
+    else if (nz > 0.5) U.setXY(i, 0.5 + qx, 0.5 + qy);
+    else U.setXY(i, 0.5 - qx, 0.5 + qy);
   }
   g.computeBoundingBox(); g.computeBoundingSphere();
   cache.set(key, g);

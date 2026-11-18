@@ -23,7 +23,8 @@ export const STOLEN_CAR = { name: 'Voiture volée', style: 'gt', maxSpeed: 42, a
 // voiture de police (on peut la voler... mais ça énerve la police !)
 export const POLICE_CAR = { name: 'Voiture de police', style: 'police', maxSpeed: 58, accel: 22, turn: 2.25, drift: 1.0, hp: 140 };
 export const STAT_NAMES = ['Vitesse', 'Accélération', 'Maniabilité', 'Drift'];
-export const COLORS = ['#e63946', '#f77f00', '#ffd60a', '#2ec4b6', '#3a86ff', '#8338ec', '#ff4fa3', '#f4f4f4', '#222222', '#7cb518'];
+// couleurs de peinture « bonbon » 🍬
+export const COLORS = ['#ff5c8a', '#ff9f43', '#ffd93d', '#4dd8c0', '#5aa9ff', '#a77bff', '#ff7ad9', '#ffffff', '#3b3b58', '#8be04e'];
 
 // Armes : rate = temps entre 2 tirs (s), dmg = dégâts, range = portée (m)
 // pellets = nombre de plombs, spread = dispersion, force = recul donné aux piétons
@@ -57,9 +58,9 @@ export const LEVEL_NAMES = ['DRIFT', 'DRIFT BLEU', 'DRIFT ORANGE', 'SUPER DRIFT'
 export const TURBO_TIME = [0, 0.9, 1.5, 2.3];
 
 // Ambiance de chaque moment de la journée (la « DA » : couleurs du ciel, lumière, brume...)
-// Jour : ciel bleu vif, soleil doré et chaud, montagnes bleutées au loin
+// Jour : ciel bleu bonbon qui devient rose pâle à l'horizon, soleil doux, montagnes lilas
 export const TIME_SET = {
-  day: { skyTop: '#3a8ff0', skyBot: '#cfe9ff', fog: '#cfe6f7', fogNear: 220, fogFar: 1500, hemi: 1.15, hemiSky: '#e8f3ff', hemiGround: '#7d8a5c', sun: 2.9, sunColor: '#ffe8c2', sunPos: [90, 160, 60], win: 0, neon: 0.55, lamp: 0.2, pool: 0, head: 0.8, spot: 0, env: 1, exposure: 1.06, bloom: [0.25, 0.45, 0.9], stars: false, clouds: true, cloud: '#ffffff', mountain: '#8fa9c6' },
+  day: { skyTop: '#4fb0ff', skyBot: '#ffe0f0', fog: '#f6dff0', fogNear: 220, fogFar: 1500, hemi: 1.15, hemiSky: '#e8f3ff', hemiGround: '#7d8a5c', sun: 2.9, sunColor: '#fff0d6', sunPos: [90, 160, 60], win: 0, neon: 0.55, lamp: 0.2, pool: 0, head: 0.8, spot: 0, env: 1, exposure: 1.06, bloom: [0.25, 0.45, 0.9], stars: false, clouds: true, cloud: '#ffffff', mountain: '#a99ad6' },
   sunset: { skyTop: '#2a3a78', skyBot: '#ff9457', fog: '#e7a07a', fogNear: 150, fogFar: 1200, hemi: 0.7, hemiSky: '#ffcfb0', hemiGround: '#4a3a44', sun: 2.3, sunColor: '#ffa860', sunPos: [160, 45, -70], win: 0.8, neon: 1.5, lamp: 2, pool: 0.08, head: 1.5, spot: 20, env: 0.6, exposure: 1.05, bloom: [0.45, 0.5, 0.8], stars: false, clouds: true, cloud: '#ffc7a8', mountain: '#5d4c66' },
   night: { skyTop: '#020512', skyBot: '#18214a', fog: '#0b1028', fogNear: 90, fogFar: 750, hemi: 0.5, hemiSky: '#7088d0', hemiGround: '#1a1a2a', sun: 0.4, sunColor: '#a8bcff', sunPos: [-70, 130, 40], win: 1.4, neon: 2.5, lamp: 3, pool: 0.2, head: 3, spot: 60, env: 0.2, exposure: 1.15, bloom: [0.8, 0.5, 0.7], stars: true, clouds: false, cloud: '#ffffff', mountain: '#121828' },
 };
