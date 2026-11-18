@@ -65,7 +65,7 @@ function unlockOnce() {
 }
 for (const ev of UNLOCK_EVENTS) window.addEventListener(ev, unlockOnce);
 
-// Pour bidouiller dans la console (F12) : TURBO.player.speed, TURBO.hero.hp = 999, TURBO.wanted.heat = 0 ...
+// Pour bidouiller dans la console (F12) : TURBO.player.speed, TURBO.hero.hp = 999, TURBO.wanted.stars ...
 window.TURBO = { G, player, hero, traffic, wanted };
 
 // =====================================================
@@ -180,19 +180,19 @@ function update(dt, t) {
     const inp = readInput();
     const onFoot = G.mode === 'foot';
     updatePlayer(dt, onFoot ? null : inp); // la voiture (roule en roue libre si on est à pied)
-    tiltCar();        // elle suit la pente du terrain
+    tiltCar();                             // elle suit la pente du terrain
     updateHero(dt, onFoot ? inp : null);   // le héros à pied
-    updateHeroModel(dt, hero);      // ses animations 3D (marche, course, visée)
-    updateWeapons(dt);// tirs, balles, roquettes
-    updatePolice(dt); // étoiles, voitures de police, policiers
-    updateTraffic(dt);       // circulation, voitures en feu
+    updateHeroModel(dt, hero);             // ses animations 3D (marche, course, visée)
+    updateWeapons(dt);                     // tirs, balles, roquettes
+    updatePolice(dt);                      // étoiles, voitures de police, policiers
+    updateTraffic(dt);                     // circulation, voitures en feu
     const hits = G.peds.update(dt, carsForPeds());
     if (hits) {
       G.shake = Math.max(G.shake, 0.25);
       crime(hits * POLICE.crime.pedHit);   // renverser des piétons : la police arrive !
     }
-    updateDestruction(dt);   // explosions, débris, arbres qui tombent
-    updateParticles(dt);     // fumée, étincelles, flammes
+    updateDestruction(dt);                 // explosions, débris, arbres qui tombent
+    updateParticles(dt);                   // fumée, étincelles, flammes
     updateCoins(dt, t);
     updateMission(dt);
     animateMission(dt, t);
@@ -201,7 +201,7 @@ function update(dt, t) {
     drawMinimap();
   } else if (G.state === 'menu') {
     // la ville continue de vivre derrière le menu
-    updatePolice(dt);        // (range la police s'il en restait)
+    updatePolice(dt);                      // (range la police s'il en restait)
     updateTraffic(dt);
     G.peds.update(dt, carsForPeds());
     updateDestruction(dt);

@@ -59,7 +59,7 @@ Tout ce que plusieurs fichiers doivent connaître est rangé dans l'objet `G` :
 | `G.camMode`, `G.camHeading` | réglages de la caméra |
 | `G.clock`, `G.elapsed` | horloge et temps de jeu |
 
-Le **niveau de recherche** est dans `wanted` (`src/gameplay/police.js`) : `heat` (points), `stars` (0 à 5).
+Le **niveau de recherche** est dans `wanted` (`src/gameplay/police.js`) : `heat` (points), `stars` (0 à 5). Pour ajouter un délit ailleurs dans le code : `crime(points)`.
 
 La **sauvegarde** (voiture choisie, couleur, records, argent, arme…) est dans `save` (`src/core/save.js`). Après une modification, appelle `persist()`.
 
@@ -113,5 +113,5 @@ Le comportement (poursuite, policiers à pied, arrestation, « semer » la polic
 
 - Les erreurs s'affichent **sous le bouton JOUER** (en rouge).
 - Pour plus de détails : **F12 → Console**.
-- Dans la console, `TURBO` donne accès au jeu : `TURBO.hero.hp = 999`, `TURBO.player.speed`, `TURBO.G.mode`, `TURBO.wanted.heat = 0` (plus de police)…
+- Dans la console, `TURBO` donne accès au jeu : `TURBO.hero.hp = 999`, `TURBO.player.speed`, `TURBO.G.mode`, `TURBO.wanted.stars` (nombre d'étoiles)…
 - Après avoir poussé sur GitHub, attends 1 à 2 minutes puis fais **Ctrl + F5**.
