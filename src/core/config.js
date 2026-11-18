@@ -1,18 +1,27 @@
 // =====================================================
-//  DONNÉES DU JEU : voitures, armes, couleurs, moments...
+//  DONNÉES DU JEU : voitures, armes, couleurs, police...
 //  ➜ Pour ajouter une voiture ou une arme, c'est ICI !
 // =====================================================
 
-// style = forme de la voiture (voir CAR_SHAPES dans vehicles/models.js)
+// style = forme de la voiture (CAR_SHAPES dans vehicles/models.js
+// ou LUXURY dans vehicles/luxury.js pour les voitures de luxe)
 export const CARS = [
   { name: 'GT Sprint', desc: 'Équilibrée, parfaite pour commencer', style: 'gt', maxSpeed: 52, accel: 20, turn: 2.2, drift: 1.0, hp: 100, stats: [4, 3, 4, 3] },
   { name: 'Drift King', desc: 'La reine de la glisse', style: 'drift', maxSpeed: 49, accel: 19, turn: 2.35, drift: 1.3, hp: 100, stats: [3, 3, 4, 5] },
   { name: 'Muscle V8', desc: 'Très rapide et solide', style: 'muscle', maxSpeed: 60, accel: 17, turn: 1.9, drift: 0.9, hp: 150, stats: [5, 3, 2, 3] },
   { name: 'Rally Mini', desc: 'Petite, agile et nerveuse', style: 'mini', maxSpeed: 46, accel: 24, turn: 2.7, drift: 1.1, hp: 90, stats: [2, 5, 5, 3] },
   { name: 'Ferrari 3D', desc: 'Vrai modèle 3D chargé en ligne', style: 'ferrari', maxSpeed: 58, accel: 22, turn: 2.25, drift: 1.05, hp: 100, stats: [5, 4, 4, 3] },
+  // ----- Voitures de luxe -----
+  { name: 'Lambo Taureau', desc: 'Supercar V12 en forme de flèche', style: 'lambo', maxSpeed: 64, accel: 25, turn: 2.3, drift: 1.1, hp: 95, stats: [5, 5, 4, 3] },
+  { name: 'Hyper Chiron', desc: 'Hypercar : la plus rapide du jeu', style: 'hyper', maxSpeed: 72, accel: 26, turn: 2.0, drift: 0.95, hp: 110, stats: [5, 5, 3, 3] },
+  { name: 'Porsche 911 R', desc: 'Précise et joueuse en drift', style: 'porsche', maxSpeed: 58, accel: 23, turn: 2.5, drift: 1.25, hp: 100, stats: [4, 4, 5, 4] },
+  { name: 'Rolls Phantom', desc: 'Limousine royale, ultra solide', style: 'rolls', maxSpeed: 50, accel: 16, turn: 1.8, drift: 0.8, hp: 220, stats: [3, 2, 2, 2] },
+  { name: 'G-Wagon 4x4', desc: 'SUV de luxe, roi des collines', style: 'suv', maxSpeed: 52, accel: 19, turn: 2.0, drift: 0.9, hp: 190, stats: [3, 3, 3, 2] },
 ];
 // voiture volée dans la circulation
 export const STOLEN_CAR = { name: 'Voiture volée', style: 'gt', maxSpeed: 42, accel: 16, turn: 2.0, drift: 0.9, hp: 80 };
+// voiture de police (on peut la voler... mais ça énerve la police !)
+export const POLICE_CAR = { name: 'Voiture de police', style: 'police', maxSpeed: 58, accel: 22, turn: 2.25, drift: 1.0, hp: 140 };
 export const STAT_NAMES = ['Vitesse', 'Accélération', 'Maniabilité', 'Drift'];
 export const COLORS = ['#e63946', '#f77f00', '#ffd60a', '#2ec4b6', '#3a86ff', '#8338ec', '#ff4fa3', '#f4f4f4', '#222222', '#7cb518'];
 
@@ -26,9 +35,17 @@ export const WEAPONS = [
   { id: 'rocket', name: 'Lance-roquettes', icon: '🚀', rate: 1.1, range: 220, rocket: true, force: 0 },
 ];
 
+// Police : points de recherche nécessaires pour 1 à 5 étoiles
+export const POLICE = {
+  stars: [20, 120, 260, 450, 700],
+  crime: { pedHit: 25, pedShot: 10, gunshot: 4, carWreck: 35, policeWreck: 90, copHit: 50, policeCarStolen: 120 },
+  carSpeed: [0, 24, 27, 30, 33, 36],   // vitesse des voitures de police selon les étoiles
+  copDamage: 5,                        // dégâts d'un tir de policier
+};
+
 export const TIMES = [{ id: 'day', name: '☀️ Jour' }, { id: 'sunset', name: '🌇 Soir' }, { id: 'night', name: '🌙 Nuit' }];
 export const TRAFFIC = [{ id: 0, name: 'Aucune' }, { id: 1, name: 'Normale' }, { id: 2, name: 'Beaucoup' }];
-export const TRAFFIC_COUNT = [0, 26, 50];
+export const TRAFFIC_COUNT = [0, 34, 64];
 export const ASSISTS = [{ id: 'strong', name: 'Forte' }, { id: 'normal', name: 'Normale' }, { id: 'pro', name: 'Pro (x1,5)' }];
 export const ASSIST = {
   strong: { rate: 1.25, slip: 0.42, th: [0.7, 1.6, 2.7], pts: 1 },

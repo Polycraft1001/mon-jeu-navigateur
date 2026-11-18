@@ -1,11 +1,13 @@
 // =====================================================
 //  MODÈLES 3D DES VOITURES
-//  ➜ Nouvelle forme de voiture : ajoute-la dans CAR_SHAPES,
-//    puis utilise son nom (style) dans core/config.js
+//  ➜ Nouvelle forme de voiture : ajoute-la dans CAR_SHAPES
+//    (formes en boîtes) ou dans LUXURY (vehicles/luxury.js,
+//    vraies silhouettes), puis utilise son nom (style) dans core/config.js
 // =====================================================
 import * as THREE from 'three';
 import { envMats, getEnvMap } from '../render/engine.js';
 import { box } from '../core/utils.js';
+import { LUXURY, buildLuxury } from './luxury.js';
 
 export const CAR_SHAPES = {
   gt: { L: 4.4, W: 2.0, H: 0.55, cabL: 2.0, cabH: 0.52, cabW: 1.6, cabZ: 0.25, spoiler: 0.4 },
@@ -28,11 +30,13 @@ export const burntMat = new THREE.MeshStandardMaterial({ color: 0x1d1b1a, roughn
 
 // Une voiture = { root, chassis, wheels, fronts, paint, glass, headMat, tailMat, spot, S, spin, envList }
 // root bouge et tourne, chassis penche, wheels tournent, fronts braquent
-function addWheels(root, W, L, wheels, fronts, detailed) {
+// size = taille des roues (1 = normale, 1.3 = grosses roues de 4x4)
+export function addWheels(root, W, L, wheels, fronts, detailed, size = 1) {
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
     const pivot = new THREE.Group();
-    pivot.position.set(sx * (W / 2 - 0.12), 0.42, sz * (L / 2 - 0.85));
+    pivot.position.set(sx * (W / 2 - 0.12), 0.42 * size, sz * (L / 2 - 0.85 * size));
     const spin = new THREE.Group();
+    spin.scale.setScalar(size);
     const t = new THREE.Mesh(wheelGeo, tireMat);
     t.castShadow = detailed;
     spin.add(t);
@@ -42,7 +46,7 @@ function addWheels(root, W, L, wheels, fronts, detailed) {
     if (sz < 0) fronts.push(pivot);
   }
 }
-function addSpot(root, y, L) {
+export function addSpot(root, y, L) {
   const spot = new THREE.SpotLight(0xfff2d0, 0, 70, 0.55, 0.5, 1.3);
   spot.position.set(0, y, -L / 2);
   spot.target.position.set(0, 0, -L / 2 - 20);
@@ -51,6 +55,7 @@ function addSpot(root, y, L) {
 }
 
 export function buildCar(style, color) {
+  if (LUXURY[style]) return buildLuxury(style, color); // voitures de luxe
   const S = CAR_SHAPES[style] || CAR_SHAPES.gt;
   const root = new THREE.Group(); root.rotation.order = 'YXZ';
   const chassis = new THREE.Group(); chassis.rotation.order = 'YXZ';

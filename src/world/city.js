@@ -1,6 +1,7 @@
 // =====================================================
 //  LA VILLE : routes, immeubles, maisons, parcs, arbres,
 //  lampadaires, tremplins, lacs et pièces
+//  + le relief tout autour (voir world/terrain.js)
 //  ➜ Les arbres et lampadaires sont des "props" qu'on peut
 //    renverser (voir fx/destruction.js)
 // =====================================================
@@ -8,15 +9,17 @@ import * as THREE from 'three';
 import { scene, envMats, getEnvMap } from '../render/engine.js';
 import { rand, rr, pick, dummy, unitBox, box } from '../core/utils.js';
 import { asphaltTex, sidewalkTex, grassTex, concreteTex, rampTex, FACADES, facadeTex, houseTex, houseEm } from './textures.js';
+import { initTerrain, terrainHeight, buildTerrain } from './terrain.js';
 
 // ----- Dimensions -----
-export const N = 8;                 // nombre de pâtés de maisons par côté
+export const N = 10;                // nombre de pâtés de maisons par côté
 export const BLOCK = 64, ROAD = 16, CELL = BLOCK + ROAD;
 export const CITY = N * CELL + ROAD, HALF = CITY / 2, LANE = 3.8;
-export const LIMIT = HALF + 190;    // bord du monde
+export const LIMIT = HALF + 420;    // bord du monde (collines comprises)
 export const rc = (i) => -HALF + ROAD / 2 + i * CELL;   // centre de la route n° i
 export const blockCenter = (j) => rc(j) + CELL / 2;
 export const SPAWN = { x: LANE, z: 40, h: 0 };
+initTerrain(HALF);
 
 export const city = new THREE.Group();
 scene.add(city);
@@ -165,7 +168,7 @@ export function setPropVisible(p, show) {
   const M = propMeshes;
   dummy.rotation.set(0, 0, 0); dummy.scale.set(1, 1, 1);
   if (p.type === 'tree') {
-    if (show) { dummy.position.set(p.x, 0.2, p.z); dummy.rotation.set(0, p.rot, 0); dummy.scale.setScalar(p.s); dummy.updateMatrix(); }
+    if (show) { dummy.position.set(p.x, 0.2 + terrainHeight(p.x, p.z), p.z); dummy.rotation.set(0, p.rot, 0); dummy.scale.setScalar(p.s); dummy.updateMatrix(); }
     const m = show ? dummy.matrix : ZERO;
     M.trunks.setMatrixAt(p.k, m); M.leaves.setMatrixAt(p.k, m);
     M.trunks.instanceMatrix.needsUpdate = true; M.leaves.instanceMatrix.needsUpdate = true;
@@ -185,9 +188,9 @@ const HOUSE_COLORS = ['#f2e2c4', '#cfe3f0', '#f4c7b5', '#d9ead3', '#fff2a8', '#e
 const ROOF_COLORS = ['#8b3a2e', '#4a4f57', '#6b4a32', '#3d5a73'];
 
 function fillDowntown(b) {
-  if (rand() < 0.25) addBuilding(b.cx, b.cz, rr(34, 46), rr(34, 46), rr(80, 140), pick([0, 1]));
+  if (rand() < 0.25) addBuilding(b.cx, b.cz, rr(34, 46), rr(34, 46), rr(80, 150), pick([0, 1]));
   else for (const qx of [-1, 1]) for (const qz of [-1, 1])
-    addBuilding(b.cx + qx * 14, b.cz + qz * 14, rr(17, 24), rr(17, 24), rr(30, 100), pick([0, 1, 1, 2, 4]));
+    addBuilding(b.cx + qx * 14, b.cz + qz * 14, rr(17, 24), rr(17, 24), rr(30, 110), pick([0, 1, 1, 2, 4]));
 }
 function fillMid(b) {
   for (const qx of [-1, 1]) for (const qz of [-1, 1]) {
@@ -236,17 +239,15 @@ function fillStunt(b) {
 
 // ----- Construction de toute la ville -----
 export function buildCity() {
-  // Sol (herbe) et routes
-  const grass = new THREE.Mesh(new THREE.PlaneGeometry(4000, 4000), groundMat);
-  grass.rotation.x = -Math.PI / 2; grass.position.y = -0.05; grass.receiveShadow = true;
-  scene.add(grass);
+  // Sol en relief (collines et montagnes autour de la ville) et routes
+  scene.add(buildTerrain(groundMat, LIMIT));
   asphaltTex.repeat.set(CITY / 8, CITY / 8);
   const road = new THREE.Mesh(new THREE.PlaneGeometry(CITY, CITY), new THREE.MeshStandardMaterial({ map: asphaltTex, roughness: 0.92 }));
   road.rotation.x = -Math.PI / 2; road.receiveShadow = true;
   city.add(road);
 
   // Types de quartiers
-  const SPECIAL = { '4,3': 'park', '2,5': 'park', '6,1': 'park', '1,6': 'park', '6,5': 'stunt', '1,2': 'stunt' };
+  const SPECIAL = { '4,3': 'park', '2,5': 'park', '6,1': 'park', '1,6': 'park', '8,8': 'park', '3,8': 'park', '8,2': 'park', '6,5': 'stunt', '1,2': 'stunt', '8,6': 'stunt' };
   for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
     const cx = blockCenter(i), cz = blockCenter(j);
     const d = Math.max(Math.abs(cx), Math.abs(cz)) / HALF;
@@ -275,11 +276,12 @@ export function buildCity() {
     else if (b.type === 'stunt') fillStunt(b);
   }
 
-  // Arbres autour de la ville
-  for (let i = 0; i < 260; i++) {
+  // Forêts sur les collines (pas sur les sommets enneigés)
+  for (let i = 0; i < 900; i++) {
     const x = rr(-LIMIT + 10, LIMIT - 10), z = rr(-LIMIT + 10, LIMIT - 10);
     if (Math.max(Math.abs(x), Math.abs(z)) < HALF + 14) continue;
-    addTree(x, z, rr(1, 1.8));
+    if (terrainHeight(x, z) > 85) continue;
+    addTree(x, z, rr(1, 1.9));
   }
 
   // Maisons (instanciées = rapide)
@@ -364,7 +366,7 @@ export function buildCity() {
 
   // Pièces sur les routes
   let placed = 0, guard = 0;
-  while (placed < 34 && guard++ < 500) {
+  while (placed < 46 && guard++ < 700) {
     const alongX = rand() < 0.5, r = Math.floor(rand() * (N + 1)), k = Math.floor(rand() * N);
     const t = rr(rc(k) + ROAD / 2 + 6, rc(k + 1) - ROAD / 2 - 6);
     const lane = (rand() < 0.5 ? -1 : 1) * LANE;
@@ -376,9 +378,9 @@ export function buildCity() {
 }
 
 // ----- Hauteur du sol -----
-// tremplins (pour les voitures)
+// relief + tremplins (pour les voitures)
 export function groundHeight(x, z) {
-  let h = 0;
+  let h = terrainHeight(x, z);
   for (const r of ramps) {
     const dx = x - r.x, dz = z - r.z;
     if (Math.abs(dx) > r.R || Math.abs(dz) > r.R) continue;
@@ -394,7 +396,7 @@ export function onBlock(x, z) {
   const i = Math.floor(u / CELL), j = Math.floor(v / CELL);
   return i < N && j < N && u - i * CELL < BLOCK && v - j * CELL < BLOCK;
 }
-// hauteur du sol pour le héros à pied (trottoirs + tremplins)
+// hauteur du sol pour le héros à pied (trottoirs + tremplins + relief)
 export function floorY(x, z) {
   return Math.max(onBlock(x, z) ? 0.24 : 0, groundHeight(x, z));
 }
