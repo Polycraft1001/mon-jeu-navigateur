@@ -6,7 +6,8 @@ import { $, clamp, isMobile } from '../core/utils.js';
 import { G } from '../core/ctx.js';
 import { WEAPONS } from '../core/config.js';
 import { player, resetPlayer } from '../vehicles/driving.js';
-import { toggleCar, callCar } from '../gameplay/onfoot.js';
+import { callCar } from '../gameplay/onfoot.js';
+import { toggleVehicle, resetPlane } from '../vehicles/planes.js';
 import { selectWeapon, nextWeapon, setTrigger } from '../gameplay/weapons.js';
 import { showMessage } from './hud.js';
 import { sfx } from './audio.js';
@@ -17,7 +18,7 @@ const touch = { up: false, down: false, drift: false, steer: 0 };
 const fire = { mouse: false, key: false, touch: false };
 const inp = { up: false, down: false, steer: 0, drift: false, sprint: false, jump: false };
 
-// Commandes du moment (pour la voiture ET pour le héros)
+// Commandes du moment (pour la voiture, le héros ET l'avion)
 export function readInput() {
   const ks = ((keys.ArrowLeft || keys.KeyA) ? 1 : 0) - ((keys.ArrowRight || keys.KeyD) ? 1 : 0);
   const shift = !!(keys.ShiftLeft || keys.ShiftRight);
@@ -51,7 +52,8 @@ export function horn() {
 }
 function resetAction() {
   if (G.state !== 'play') return;
-  if (G.mode === 'foot') callCar();
+  if (G.mode === 'plane') resetPlane();
+  else if (G.mode === 'foot') callCar();
   else { resetPlayer(false); showMessage('Voiture replacée', '#ffffff', 0.8); }
 }
 const cycleCam = () => { G.camMode = (G.camMode + 1) % 3; };
@@ -65,7 +67,7 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'Escape' || e.code === 'KeyP') { togglePause(); return; }
   if (G.state !== 'play') return;
   switch (e.code) {
-    case 'KeyF': case 'Enter': case 'NumpadEnter': toggleCar(); break; // sortir / monter / voler
+    case 'KeyF': case 'Enter': case 'NumpadEnter': toggleVehicle(); break; // sortir / monter / voler / piloter
     case 'KeyR': resetAction(); break;
     case 'KeyH': horn(); break;
     case 'KeyC': case 'KeyV': cycleCam(); break;
@@ -164,7 +166,7 @@ document.querySelectorAll('#tools button[data-a]').forEach((b) => {
     if (a === 'horn') horn();
     else if (a === 'cam') cycleCam();
     else if (a === 'reset') resetAction();
-    else if (a === 'car') toggleCar();
+    else if (a === 'car') toggleVehicle();
     else if (a === 'weapon') nextWeapon(1);
   });
 });

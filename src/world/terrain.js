@@ -1,16 +1,33 @@
 // =====================================================
 //  RELIEF : la ville est plate, puis des collines
 //  et des montagnes l'entourent.
+//  Au sud de la ville : l'AÉROPORT, une grande zone plate ✈️
 //  terrainHeight(x, z) = hauteur du sol (en mètres)
 // =====================================================
 import * as THREE from 'three';
 
 let FLAT = 440;          // jusqu'ici : plat (la ville)
 const RISE = 140;        // distance pour que les collines montent
-export function initTerrain(half) { FLAT = half + 30; }
+
+// L'aéroport : rectangle tout plat (hw, hd = demi-largeur, demi-profondeur)
+// m = distance sur laquelle les collines redescendent doucement autour
+export const AIRPORT = { x: 0, z: 0, hw: 300, hd: 55, m: 90 };
+
+export function initTerrain(half) {
+  FLAT = half + 30;
+  AIRPORT.z = half + 87; // juste au sud de la ville
+}
 
 const smooth = (t) => t * t * (3 - 2 * t);
-export function terrainHeight(x, z) {
+
+// distance (en mètres) jusqu'au rectangle de l'aéroport (0 = dedans)
+function airportDist(x, z) {
+  return Math.max(Math.abs(x - AIRPORT.x) - AIRPORT.hw, Math.abs(z - AIRPORT.z) - AIRPORT.hd, 0);
+}
+export const inAirport = (x, z, extra = 0) => airportDist(x, z) <= extra;
+
+// collines et montagnes (sans l'aéroport)
+function hills(x, z) {
   const d = Math.max(Math.abs(x), Math.abs(z)) - FLAT;
   if (d <= 0) return 0;
   const t = d >= RISE ? 1 : smooth(d / RISE);
@@ -19,6 +36,14 @@ export function terrainHeight(x, z) {
     + 5 * Math.sin(x * 0.027 + z * 0.019) + 2.5 * Math.sin(z * 0.05 - x * 0.031);
   const far = Math.max(0, d - 330); // grandes montagnes au bord du monde
   return t * Math.max(0.5, n) + Math.min(far * far * 0.004, 150);
+}
+
+export function terrainHeight(x, z) {
+  const h = hills(x, z);
+  if (h <= 0) return 0;
+  const a = airportDist(x, z);
+  if (a >= AIRPORT.m) return h;
+  return h * smooth(a / AIRPORT.m); // aplati autour de l'aéroport
 }
 
 // Pente sous un objet (voiture) : tangage (avant/arrière) et roulis (gauche/droite)

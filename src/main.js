@@ -17,6 +17,7 @@ import { applyTime } from './world/time.js';
 import { setFerrari } from './vehicles/models.js'; // à garder AVANT les autres véhicules
 import { player, updatePlayer, setPlayerCar, resetPlayer, syncCarMesh } from './vehicles/driving.js';
 import { traffic, spawnTraffic, updateTraffic } from './vehicles/traffic.js';
+import { planes, initPlanes, updatePlanes, updatePlaneCamera } from './vehicles/planes.js';
 import { createPedestrians } from './npc/pedestrians.js';
 import { loadCharacters, attachHero, updateHeroModel } from './npc/characters.js';
 import { hero, focusPos, updateHero } from './gameplay/onfoot.js';
@@ -40,6 +41,7 @@ if (isMobile) document.body.classList.add('touchUI'); // interface pour écran t
 G.clock = new THREE.Clock();
 
 buildCity();
+initPlanes();           // aéroport, avions à piloter, avions de ligne
 drawMapBase();
 G.peds = createPedestrians({
   scene, N, BLOCK, CELL, blockCenter, colliders,
@@ -66,7 +68,7 @@ function unlockOnce() {
 for (const ev of UNLOCK_EVENTS) window.addEventListener(ev, unlockOnce);
 
 // Pour bidouiller dans la console (F12) : TURBO.player.speed, TURBO.hero.hp = 999, TURBO.wanted.stars ...
-window.TURBO = { G, player, hero, traffic, wanted };
+window.TURBO = { G, player, hero, traffic, wanted, planes };
 
 // =====================================================
 //  2) GRAPHISMES HD (chargés en ligne, en arrière-plan)
@@ -178,10 +180,11 @@ function update(dt, t) {
   if (G.state === 'play') {
     G.elapsed += dt;
     const inp = readInput();
-    const onFoot = G.mode === 'foot';
-    updatePlayer(dt, onFoot ? null : inp); // la voiture (roule en roue libre si on est à pied)
-    tiltCar();                             // elle suit la pente du terrain
-    updateHero(dt, onFoot ? inp : null);   // le héros à pied
+    const mode = G.mode;
+    updatePlayer(dt, mode === 'car' ? inp : null);    // la voiture (roule en roue libre si on n'est pas dedans)
+    tiltCar();                                        // elle suit la pente du terrain
+    updateHero(dt, mode === 'foot' ? inp : null);     // le héros à pied
+    updatePlanes(dt, mode === 'plane' ? inp : null);  // les avions (et le parachute)
     updateHeroModel(dt, hero);             // ses animations 3D (marche, course, visée)
     updateWeapons(dt);                     // tirs, balles, roquettes
     updatePolice(dt);                      // étoiles, voitures de police, policiers
@@ -196,13 +199,14 @@ function update(dt, t) {
     updateCoins(dt, t);
     updateMission(dt);
     animateMission(dt, t);
-    updateCamera(dt);
+    if (G.mode === 'plane') updatePlaneCamera(dt); else updateCamera(dt);
     updateHUD(dt);
     drawMinimap();
   } else if (G.state === 'menu') {
     // la ville continue de vivre derrière le menu
     updatePolice(dt);                      // (range la police s'il en restait)
     updateTraffic(dt);
+    updatePlanes(dt, null);                // les avions de ligne passent dans le ciel
     G.peds.update(dt, carsForPeds());
     updateDestruction(dt);
     updateParticles(dt);
@@ -227,7 +231,7 @@ function frame() {
   const t = G.clock.elapsedTime;
   try { update(dt, t); } catch (e) { report(e); }
   // le soleil (et donc les ombres) suit le joueur, le ciel suit la caméra
-  const f = focusPos();
+  const f = G.mode === 'plane' ? hero.pos : focusPos();
   sun.position.set(f.x + sunOffset.x, sunOffset.y, f.z + sunOffset.z);
   sun.target.position.set(f.x, 0, f.z);
   sky.position.copy(camera.position);
