@@ -8,17 +8,20 @@ import * as THREE from 'three';
 import { $, isMobile } from './core/utils.js';
 import { G } from './core/ctx.js';
 import { save } from './core/save.js';
-import { CARS } from './core/config.js';
+import { CARS, POLICE } from './core/config.js';
 import { loadTexture, loadModel } from './assets.js';
 import { renderer, scene, camera, render, sun, sunOffset, sky, stars } from './render/engine.js';
-import { buildCity, N, BLOCK, CELL, blockCenter, colliders, grassMat, groundMat, waterMat } from './world/city.js';
+import { buildCity, N, BLOCK, CELL, blockCenter, colliders, grassMat, waterMat } from './world/city.js';
+import { slopeTilt } from './world/terrain.js';
 import { applyTime } from './world/time.js';
-import { setFerrari } from './vehicles/models.js';
+import { setFerrari } from './vehicles/models.js'; // à garder AVANT les autres véhicules
 import { player, updatePlayer, setPlayerCar, resetPlayer, syncCarMesh } from './vehicles/driving.js';
 import { traffic, spawnTraffic, updateTraffic } from './vehicles/traffic.js';
 import { createPedestrians } from './npc/pedestrians.js';
+import { loadCharacters, attachHero, updateHeroModel } from './npc/characters.js';
 import { hero, focusPos, updateHero } from './gameplay/onfoot.js';
 import { updateWeapons } from './gameplay/weapons.js';
+import { initPolice, updatePolice, crime, wanted } from './gameplay/police.js';
 import { updateParticles } from './fx/particles.js';
 import { updateDestruction } from './fx/destruction.js';
 import { resetCoins, updateCoins } from './gameplay/coins.js';
@@ -43,6 +46,7 @@ G.peds = createPedestrians({
   count: isMobile ? 28 : 64,   // moins de piétons sur téléphone
   shadows: !isMobile,
 });
+initPolice();           // étoiles de recherche, voitures et policiers
 setPlayerCar();
 resetPlayer(true);
 syncCarMesh(0);
@@ -61,8 +65,8 @@ function unlockOnce() {
 }
 for (const ev of UNLOCK_EVENTS) window.addEventListener(ev, unlockOnce);
 
-// Pour bidouiller dans la console (F12) : TURBO.player.speed, TURBO.hero.hp = 999 ...
-window.TURBO = { G, player, hero, traffic };
+// Pour bidouiller dans la console (F12) : TURBO.player.speed, TURBO.hero.hp = 999, TURBO.wanted.heat = 0 ...
+window.TURBO = { G, player, hero, traffic, wanted };
 
 // =====================================================
 //  2) GRAPHISMES HD (chargés en ligne, en arrière-plan)
@@ -77,14 +81,12 @@ Promise.all([
   loadModel('models/gltf/ferrari.glb'),
   loadTexture('models/gltf/ferrari_ao.png'),
   skyReady,
-]).then(([grass, water, ferrari, ao, skyOk]) => {
+  loadCharacters().catch((e) => { console.warn(e); return false; }), // persos 3D animés
+]).then(([grass, water, ferrari, ao, skyOk, chars]) => {
   if (grass) {
     grass.repeat.set(4, 4);
-    grassMat.map = grass; grassMat.needsUpdate = true;      // parcs
-    const big = grass.clone();
-    big.repeat.set(300, 300); big.needsUpdate = true;
-    groundMat.map = big; groundMat.color.set(0xa8c493);      // grand terrain autour de la ville
-    groundMat.needsUpdate = true;
+    grassMat.map = grass; grassMat.needsUpdate = true; // parcs
+    // (le grand terrain en relief garde ses couleurs : herbe → roche → neige)
   }
   if (water) {
     water.repeat.set(3, 3);
@@ -98,8 +100,9 @@ Promise.all([
     // la Ferrari était choisie : on remplace la voiture de secours par la vraie
     if (G.state === 'menu' && CARS[save.car] && CARS[save.car].style === 'ferrari') { setPlayerCar(); syncCarMesh(0); }
   }
+  if (chars) attachHero(hero.mesh); // le héros devient un vrai perso 3D animé
   buildMenu(); // enlève le « (chargement…) » de la carte Ferrari
-  const res = [grass, water, ferrari, ao, skyOk];
+  const res = [grass, water, ferrari, ao, skyOk, chars];
   const ok = res.filter(Boolean).length;
   status.textContent = ok === res.length
     ? '✨ Graphismes HD chargés (' + ok + '/' + res.length + ')'
@@ -132,7 +135,7 @@ function carsForPeds() {
     c.W = G.car.S.W; c.L = G.car.S.L; c.top = G.car.top || 1.4;
     carList.push(c);
   }
-  // la circulation (garées, en feu et épaves comprises)
+  // la circulation (garées, en feu, épaves et voitures de police comprises)
   for (const o of traffic) {
     const c = slot(n++), still = o.parked || o.dead || !o.dir, sp = still ? 0 : o.speed;
     c.player = false; c.soft = false;
@@ -154,6 +157,20 @@ function carsForPeds() {
 }
 
 // =====================================================
+//  La voiture penche avec la pente (collines, montagnes)
+// =====================================================
+const tilt = { pitch: 0, roll: 0 };
+function tiltCar() {
+  if (!G.car || player.wrecked || !player.grounded) return;
+  const root = G.car.root;
+  if (!root) return;
+  if (root.rotation.order !== 'YXZ') root.rotation.order = 'YXZ';
+  slopeTilt(player.pos.x, player.pos.z, player.h, G.car.S.L, G.car.S.W, tilt);
+  root.rotation.x = tilt.pitch; // avant / arrière
+  root.rotation.z = tilt.roll;  // gauche / droite
+}
+
+// =====================================================
 //  3) LA BOUCLE DU JEU
 //  L'ordre compte : commandes → joueur → monde → effets → caméra → écran
 // =====================================================
@@ -163,13 +180,19 @@ function update(dt, t) {
     const inp = readInput();
     const onFoot = G.mode === 'foot';
     updatePlayer(dt, onFoot ? null : inp); // la voiture (roule en roue libre si on est à pied)
+    tiltCar();        // elle suit la pente du terrain
     updateHero(dt, onFoot ? inp : null);   // le héros à pied
-    updateWeapons(dt);                     // tirs, balles, roquettes
-    updateTraffic(dt);                     // circulation, voitures en feu
+    updateHeroModel(dt, hero);      // ses animations 3D (marche, course, visée)
+    updateWeapons(dt);// tirs, balles, roquettes
+    updatePolice(dt); // étoiles, voitures de police, policiers
+    updateTraffic(dt);       // circulation, voitures en feu
     const hits = G.peds.update(dt, carsForPeds());
-    if (hits) G.shake = Math.max(G.shake, 0.25);
-    updateDestruction(dt);                 // explosions, débris, arbres qui tombent
-    updateParticles(dt);                   // fumée, étincelles, flammes
+    if (hits) {
+      G.shake = Math.max(G.shake, 0.25);
+      crime(hits * POLICE.crime.pedHit);   // renverser des piétons : la police arrive !
+    }
+    updateDestruction(dt);   // explosions, débris, arbres qui tombent
+    updateParticles(dt);     // fumée, étincelles, flammes
     updateCoins(dt, t);
     updateMission(dt);
     animateMission(dt, t);
@@ -178,6 +201,7 @@ function update(dt, t) {
     drawMinimap();
   } else if (G.state === 'menu') {
     // la ville continue de vivre derrière le menu
+    updatePolice(dt);        // (range la police s'il en restait)
     updateTraffic(dt);
     G.peds.update(dt, carsForPeds());
     updateDestruction(dt);

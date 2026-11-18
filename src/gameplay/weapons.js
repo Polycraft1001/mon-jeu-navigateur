@@ -2,13 +2,15 @@
 //  ARMES : poings, pistolet, mitraillette, fusil à pompe,
 //  lance-roquettes. Visée automatique (anneau rouge),
 //  tirs instantanés (rayons) et roquettes qui explosent.
+//  Attention : tirer en ville ou toucher quelqu'un
+//  fait venir la police (gameplay/police.js) !
 //  ➜ Ajouter une arme : core/config.js (WEAPONS)
 //     + son modèle 3D dans gameplay/onfoot.js (gun(...))
 // =====================================================
 import * as THREE from 'three';
 import { scene, camera } from '../render/engine.js';
 import { G } from '../core/ctx.js';
-import { WEAPONS } from '../core/config.js';
+import { WEAPONS, POLICE } from '../core/config.js';
 import { save, persist } from '../core/save.js';
 import { clamp } from '../core/utils.js';
 import { colliders } from '../world/city.js';
@@ -17,6 +19,7 @@ import { player, damageCar, localToWorld } from '../vehicles/driving.js';
 import { emit, burst } from '../fx/particles.js';
 import { muzzleFlash, explode, breakProp } from '../fx/destruction.js';
 import { hero, heroMuzzle, showWeapon } from './onfoot.js';
+import { cops, rayCops, hitCop, blastCops, crime, reportShot } from './police.js';
 import { sfx } from '../ui/audio.js';
 import { showMessage } from '../ui/hud.js';
 
@@ -63,7 +66,7 @@ function rayCar(o, d, x, y, z, h, S, top, maxT) {
   return rayBox(qx * cs - qz * sn, o.y, qx * sn + qz * cs, d.x * cs - d.z * sn, d.y, d.x * sn + d.z * cs,
     -S.W / 2, y, -S.L / 2, S.W / 2, y + top, S.L / 2, maxT);
 }
-// Renvoie ce que le rayon touche en premier : sol, mur, voiture, piéton...
+// Renvoie ce que le rayon touche en premier : sol, mur, voiture, piéton, policier...
 function castRay(o, d, maxT, skipMyCar) {
   let best = maxT, kind = 'none', ref = null;
   if (d.y < -1e-4) { const t = (0.03 - o.y) / d.y; if (t > 0 && t < best) { best = t; kind = 'ground'; } }
@@ -81,6 +84,8 @@ function castRay(o, d, maxT, skipMyCar) {
     if (t >= 0 && t < best) { best = t; kind = 'mycar'; ref = null; }
   }
   if (G.peds) { const r = G.peds.raycast(o, d, best); if (r) { best = r.t; kind = 'ped'; ref = r.p; } }
+  const k = rayCops(o, d, best);
+  if (k) { best = k.t; kind = 'cop'; ref = k.cop; }
   return { kind, ref, t: best, x: o.x + d.x * best, y: o.y + d.y * best, z: o.z + d.z * best };
 }
 function clearShot(o, x, y, z) { // rien entre nous et la cible ?
@@ -105,6 +110,7 @@ function findTarget(o, h, range, cone) {
     if (a < cone) cands.push({ x, y, z, s: a * 40 + d });
   };
   if (G.peds) for (const p of G.peds.list) if (p.mode === 'walk') { G.peds.center(p, _c); add(_c.x, _c.y - 0.1, _c.z); }
+  for (const c of cops) if (c.state === 'ok') add(c.x, c.y + 1.1, c.z);
   for (const c of traffic) if (!c.exploded) add(c.vx, c.y + 0.9, c.vz);
   cands.sort((a, b) => a.s - b.s);
   for (let i = 0; i < Math.min(4, cands.length); i++) if (clearShot(o, cands[i].x, cands[i].y, cands[i].z)) return cands[i];
@@ -165,6 +171,7 @@ function updateRockets(dt) {
     if (hit.kind !== 'none' || r.dist > 220) {
       r.on = false; r.m.visible = false;
       explode(hit.x, Math.max(0, hit.y - 0.5), hit.z, 1.1);
+      blastCops(hit.x, hit.z, 7); // les policiers autour tombent
       continue;
     }
     r.x = hit.x; r.y = hit.y; r.z = hit.z;
@@ -177,7 +184,13 @@ function updateRockets(dt) {
 // ----- Effets d'un impact -----
 function hitEffect(h, d, w) {
   const dmg = w.dmg || 0;
-  if (h.kind === 'ped') { G.peds.shoot(h.ref, d, w.force + 3); burst(h.x, h.y, h.z, '#ffffff', 4, 2.5, false); }
+  if (h.kind === 'ped') {
+    G.peds.shoot(h.ref, d, w.force + 3); burst(h.x, h.y, h.z, '#ffffff', 4, 2.5, false);
+    crime(POLICE.crime.pedShot);
+  } else if (h.kind === 'cop') { // toucher un policier : la police s'énerve beaucoup !
+    hitCop(h.ref, dmg || 10, d.x, d.z, w.force + 3);
+    burst(h.x, h.y, h.z, '#ffffff', 4, 2.5, false);
+  }
   else if (h.kind === 'car') { damageTraffic(h.ref, dmg); burst(h.x, h.y, h.z, '#ffd27a', 6, 6, true); }
   else if (h.kind === 'mycar') { damageCar(dmg * 0.6); burst(h.x, h.y, h.z, '#ffd27a', 6, 6, true); }
   else if (h.kind === 'wall') {
@@ -223,12 +236,28 @@ function fire(w, s) {
   muzzleFlash(m.x, m.y, m.z);
   sfx(w.id, 0.55);
   if (G.peds) G.peds.scare(s.x, s.z, 45);
+  reportShot(s.x, s.z); // un coup de feu en ville : la police l'entend
   G.shake = Math.max(G.shake, w.rocket || w.pellets ? 0.25 : 0.05);
 }
 
 function punch(w) {
   hero.punchT = 0.25;
   let fx = -Math.sin(hero.h), fz = -Math.cos(hero.h);
+  // un policier juste devant ? (ça énerve la police !)
+  let cop = null, cd = 2.4;
+  for (const c of cops) {
+    if (c.state !== 'ok') continue;
+    const dx = c.x - hero.pos.x, dz = c.z - hero.pos.z, d = Math.hypot(dx, dz);
+    if (d < cd && (dx * fx + dz * fz) / (d || 1) > 0.3) { cd = d; cop = c; }
+  }
+  if (cop) {
+    const dx = cop.x - hero.pos.x, dz = cop.z - hero.pos.z, L = Math.hypot(dx, dz) || 1;
+    hero.h = Math.atan2(-dx, -dz);
+    hitCop(cop, w.dmg || 10, dx / L, dz / L, w.force);
+    burst(cop.x, cop.y + 1.3, cop.z, '#ffffff', 4, 2, false);
+    sfx('punch', 0.6);
+    return;
+  }
   // on se tourne vers le piéton le plus proche devant soi
   if (G.peds) {
     let best = null, bd = 2.6;
@@ -244,13 +273,15 @@ function punch(w) {
   const r = G.peds ? G.peds.raycast(o, _d, w.range, true) : null;
   if (r) {
     G.peds.shoot(r.p, _d, w.force);
+    crime(POLICE.crime.pedShot * 0.5);
     burst(o.x + fx * r.t, o.y, o.z + fz * r.t, '#ffffff', 4, 2, false);
     sfx('punch', 0.6);
     G.peds.scare(o.x, o.z, 15);
     return;
   }
   const hit = castRay(o, _d, w.range, false);
-  if (hit.kind === 'car') { damageTraffic(hit.ref, w.dmg * 0.5); sfx('punch', 0.6); }
+  if (hit.kind === 'cop') { hitCop(hit.ref, w.dmg || 10, _d.x, _d.z, w.force); sfx('punch', 0.6); }
+  else if (hit.kind === 'car') { damageTraffic(hit.ref, w.dmg * 0.5); sfx('punch', 0.6); }
   else if (hit.kind === 'mycar') { damageCar(w.dmg * 0.3); sfx('punch', 0.6); }
   else if (hit.kind === 'wall') sfx('punch', 0.3);
 }
