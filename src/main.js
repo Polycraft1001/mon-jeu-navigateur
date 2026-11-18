@@ -12,6 +12,7 @@ import { CARS, POLICE } from './core/config.js';
 import { loadTexture, loadModel } from './assets.js';
 import { renderer, scene, camera, render, sun, sunOffset, sky, stars } from './render/engine.js';
 import { buildCity, N, BLOCK, CELL, blockCenter, colliders, grassMat, waterMat } from './world/city.js';
+import { initDecor, updateDecor } from './world/decor.js';
 import { slopeTilt } from './world/terrain.js';
 import { applyTime } from './world/time.js';
 import { setFerrari } from './vehicles/models.js'; // à garder AVANT les autres véhicules
@@ -42,6 +43,8 @@ G.clock = new THREE.Clock();
 
 buildCity();
 initPlanes();           // aéroport, avions à piloter, avions de ligne
+try { initDecor(); }    // boutiques, terrasses, pubs, abribus, dirigeable...
+catch (e) { console.warn('Décor non chargé :', e); }
 drawMapBase();
 G.peds = createPedestrians({
   scene, N, BLOCK, CELL, blockCenter, colliders,
@@ -199,6 +202,7 @@ function update(dt, t) {
     updateCoins(dt, t);
     updateMission(dt);
     animateMission(dt, t);
+    updateDecor(dt);                       // dirigeable et montgolfières
     if (G.mode === 'plane') updatePlaneCamera(dt); else updateCamera(dt);
     updateHUD(dt);
     drawMinimap();
@@ -211,6 +215,7 @@ function update(dt, t) {
     updateDestruction(dt);
     updateParticles(dt);
     animateMission(dt, t);
+    updateDecor(dt);
     updateMenuCamera(dt);
   }
   // en pause : rien ne bouge, on redessine juste l'image

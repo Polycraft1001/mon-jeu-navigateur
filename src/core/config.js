@@ -56,8 +56,10 @@ export const LEVEL_COLORS = ['#ffffff', '#4fc3ff', '#ff9d2e', '#c46bff'];
 export const LEVEL_NAMES = ['DRIFT', 'DRIFT BLEU', 'DRIFT ORANGE', 'SUPER DRIFT'];
 export const TURBO_TIME = [0, 0.9, 1.5, 2.3];
 
+// Ambiance de chaque moment de la journée (la « DA » : couleurs du ciel, lumière, brume...)
+// Jour : ciel bleu vif, soleil doré et chaud, montagnes bleutées au loin
 export const TIME_SET = {
-  day: { skyTop: '#2f7fe0', skyBot: '#d7ecff', fog: '#cddff0', fogNear: 200, fogFar: 1400, hemi: 1.0, hemiSky: '#dcecff', hemiGround: '#5b6a4c', sun: 2.6, sunColor: '#fff3e0', sunPos: [90, 160, 60], win: 0, neon: 0.5, lamp: 0.2, pool: 0, head: 0.8, spot: 0, env: 1, exposure: 1.0, bloom: [0.2, 0.4, 0.92], stars: false, clouds: true, cloud: '#ffffff', mountain: '#7f93a3' },
-  sunset: { skyTop: '#2a3a78', skyBot: '#ff9457', fog: '#e7a07a', fogNear: 150, fogFar: 1200, hemi: 0.65, hemiSky: '#ffcfb0', hemiGround: '#4a3a44', sun: 2.2, sunColor: '#ffa860', sunPos: [160, 45, -70], win: 0.7, neon: 1.5, lamp: 2, pool: 0.08, head: 1.5, spot: 20, env: 0.6, exposure: 1.05, bloom: [0.45, 0.5, 0.8], stars: false, clouds: true, cloud: '#ffc7a8', mountain: '#5d4c66' },
+  day: { skyTop: '#3a8ff0', skyBot: '#cfe9ff', fog: '#cfe6f7', fogNear: 220, fogFar: 1500, hemi: 1.15, hemiSky: '#e8f3ff', hemiGround: '#7d8a5c', sun: 2.9, sunColor: '#ffe8c2', sunPos: [90, 160, 60], win: 0, neon: 0.55, lamp: 0.2, pool: 0, head: 0.8, spot: 0, env: 1, exposure: 1.06, bloom: [0.25, 0.45, 0.9], stars: false, clouds: true, cloud: '#ffffff', mountain: '#8fa9c6' },
+  sunset: { skyTop: '#2a3a78', skyBot: '#ff9457', fog: '#e7a07a', fogNear: 150, fogFar: 1200, hemi: 0.7, hemiSky: '#ffcfb0', hemiGround: '#4a3a44', sun: 2.3, sunColor: '#ffa860', sunPos: [160, 45, -70], win: 0.8, neon: 1.5, lamp: 2, pool: 0.08, head: 1.5, spot: 20, env: 0.6, exposure: 1.05, bloom: [0.45, 0.5, 0.8], stars: false, clouds: true, cloud: '#ffc7a8', mountain: '#5d4c66' },
   night: { skyTop: '#020512', skyBot: '#18214a', fog: '#0b1028', fogNear: 90, fogFar: 750, hemi: 0.5, hemiSky: '#7088d0', hemiGround: '#1a1a2a', sun: 0.4, sunColor: '#a8bcff', sunPos: [-70, 130, 40], win: 1.4, neon: 2.5, lamp: 3, pool: 0.2, head: 3, spot: 60, env: 0.2, exposure: 1.15, bloom: [0.8, 0.5, 0.7], stars: true, clouds: false, cloud: '#ffffff', mountain: '#121828' },
 };
