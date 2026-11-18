@@ -1,6 +1,7 @@
 // =====================================================
 //  LA VILLE : routes, immeubles, maisons, parcs, arbres,
-//  lampadaires, tremplins, lacs et pièces
+//  lampadaires, tremplins, lacs, pièces, bancs, poubelles
+//  et bouches d'incendie
 //  + le relief tout autour (voir world/terrain.js)
 //  ➜ Les arbres et lampadaires sont des "props" qu'on peut
 //    renverser (voir fx/destruction.js)
@@ -8,7 +9,7 @@
 import * as THREE from 'three';
 import { scene, envMats, getEnvMap } from '../render/engine.js';
 import { rand, rr, pick, dummy, unitBox, box } from '../core/utils.js';
-import { asphaltTex, sidewalkTex, grassTex, concreteTex, rampTex, FACADES, facadeTex, houseTex, houseEm } from './textures.js';
+import { asphaltTex, sidewalkTex, grassTex, concreteTex, rampTex, FACADES, facadeTex, houseTex, houseEm, groundTex, roofTex, roofTileTex, waterNormal } from './textures.js';
 import { initTerrain, terrainHeight, buildTerrain } from './terrain.js';
 
 // ----- Dimensions -----
@@ -39,17 +40,25 @@ export function addCollider(x, z, w, d, h, kind = 'b') {
 }
 
 // ----- Matériaux -----
-const roofMat = new THREE.MeshStandardMaterial({ color: 0x5b6068, roughness: 0.9 });
+// (bumpMap = petit relief : joints, gravier, briques...)
+const roofMat = new THREE.MeshStandardMaterial({ map: roofTex, bumpMap: roofTex, bumpScale: 1.5, roughness: 0.9 });
 export const antennaMat = new THREE.MeshStandardMaterial({ color: 0x330000, emissive: 0xff2020, emissiveIntensity: 1 });
-const sidewalkMat = new THREE.MeshStandardMaterial({ map: sidewalkTex, roughness: 0.95 });
+const sidewalkMat = new THREE.MeshStandardMaterial({ map: sidewalkTex, bumpMap: sidewalkTex, bumpScale: 2, roughness: 0.95 });
 sidewalkTex.repeat.set(16, 16);
 export const grassMat = new THREE.MeshStandardMaterial({ map: grassTex, roughness: 1 });
 grassTex.repeat.set(10, 10);
-export const groundMat = new THREE.MeshStandardMaterial({ color: 0x4f7d3a, roughness: 1 });
-const concreteMat = new THREE.MeshStandardMaterial({ map: concreteTex, roughness: 0.9 });
+export const groundMat = new THREE.MeshStandardMaterial({ color: 0x5a8c42, map: groundTex, roughness: 1 });
+groundTex.repeat.set(140, 140);
+const concreteMat = new THREE.MeshStandardMaterial({ map: concreteTex, bumpMap: concreteTex, bumpScale: 1.5, roughness: 0.9 });
 concreteTex.repeat.set(8, 8);
-export const waterMat = new THREE.MeshStandardMaterial({ color: 0x2f6fc0, roughness: 0.08, metalness: 0.3, envMap: getEnvMap() });
+waterNormal.repeat.set(3, 3);
+export const waterMat = new THREE.MeshStandardMaterial({
+  color: 0x2f6fc0, roughness: 0.08, metalness: 0.3, envMap: getEnvMap(),
+  normalMap: waterNormal, normalScale: new THREE.Vector2(0.5, 0.5),
+});
 envMats.push(waterMat);
+// l'eau bouge doucement
+const animWater = () => { const t = performance.now() * 0.00002; waterNormal.offset.set(t, t * 0.7); };
 const rampMat = new THREE.MeshStandardMaterial({ map: rampTex, roughness: 0.7 });
 export const lampHeadMat = new THREE.MeshStandardMaterial({ color: 0xfff1c8, emissive: 0xffd28a, emissiveIntensity: 0.2 });
 export const poolMat = new THREE.MeshBasicMaterial({ color: 0xffb85a, transparent: true, opacity: 0.2, blending: THREE.AdditiveBlending, depthWrite: false });
@@ -79,6 +88,7 @@ function facadeMaterial(fi, w, d, h) {
   const em = facadeTex[fi].em.clone(); em.repeat.set(across / 8, floors / 8); em.needsUpdate = true;
   const m = new THREE.MeshStandardMaterial({
     map, emissiveMap: em, emissive: 0xffffff, emissiveIntensity: 0,
+    bumpMap: f.glassy ? null : map, bumpScale: 1.2,
     roughness: f.glassy ? 0.25 : 0.85, metalness: f.glassy ? 0.3 : 0.02,
     envMap: f.glassy ? getEnvMap() : null,
   });
@@ -212,6 +222,7 @@ function fillSuburb(b) {
 function fillPark(b) {
   const pond = new THREE.Mesh(new THREE.CircleGeometry(9, 32), waterMat);
   pond.rotation.x = -Math.PI / 2; pond.position.set(b.cx, 0.27, b.cz);
+  pond.onBeforeRender = animWater;
   city.add(pond);
   ponds.push({ x: b.cx, z: b.cz, r: 9 });
   for (let i = 0; i < 24; i++) {
@@ -237,12 +248,67 @@ function fillStunt(b) {
   }
 }
 
+// ----- Mobilier urbain : bancs, poubelles, bouches d'incendie -----
+// Assemble plusieurs boîtes [largeur, hauteur, profondeur, x, y, z] en une seule forme
+function mergeBoxes(parts) {
+  const pos = [], nor = [];
+  for (const [w, h, d, x, y, z] of parts) {
+    const g = new THREE.BoxGeometry(w, h, d).toNonIndexed();
+    g.translate(x, y, z);
+    pos.push(...g.attributes.position.array);
+    nor.push(...g.attributes.normal.array);
+    g.dispose();
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  return g;
+}
+function addStreetFurniture() {
+  const benches = [], bins = [], hydrants = [];
+  const E = BLOCK / 2 - 2.6; // près du bord du trottoir
+  for (const b of blocks) {
+    if (b.type === 'stunt') continue;
+    for (const [nx, nz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const tx = -nz, tz = nx; // direction le long du trottoir
+      const x = b.cx + nx * E, z = b.cz + nz * E;
+      if (b.type !== 'suburb' && rand() < 0.75) {
+        benches.push([x, z, Math.atan2(nx, nz)]); // le banc regarde la route
+        bins.push([x + tx * 2.3, z + tz * 2.3]);
+      }
+      if (rand() < 0.35) hydrants.push([b.cx + nx * (BLOCK / 2 - 1.4) + tx * 12, b.cz + nz * (BLOCK / 2 - 1.4) + tz * 12]);
+    }
+  }
+  const benchGeo = mergeBoxes([
+    [2, 0.1, 0.55, 0, 0.55, 0.05],      // assise
+    [2, 0.45, 0.08, 0, 0.95, -0.24],    // dossier
+    [0.1, 0.55, 0.5, -0.85, 0.275, 0.05], // pieds
+    [0.1, 0.55, 0.5, 0.85, 0.275, 0.05],
+    [0.1, 0.5, 0.08, -0.85, 0.85, -0.24],
+    [0.1, 0.5, 0.08, 0.85, 0.85, -0.24],
+  ]);
+  const binGeo = new THREE.CylinderGeometry(0.32, 0.27, 0.95, 10); binGeo.translate(0, 0.475 + 0.24, 0);
+  const hydGeo = new THREE.CylinderGeometry(0.16, 0.21, 0.75, 8); hydGeo.translate(0, 0.375 + 0.24, 0);
+  const benchMesh = new THREE.InstancedMesh(benchGeo, new THREE.MeshStandardMaterial({ color: 0x8a5a33, roughness: 0.8 }), benches.length);
+  const binMesh = new THREE.InstancedMesh(binGeo, new THREE.MeshStandardMaterial({ color: 0x2f4a35, metalness: 0.3, roughness: 0.6 }), bins.length);
+  const hydMesh = new THREE.InstancedMesh(hydGeo, new THREE.MeshStandardMaterial({ color: 0xc8242a, roughness: 0.5 }), hydrants.length);
+  benches.forEach(([x, z, rot], k) => {
+    dummy.position.set(x, 0.24, z); dummy.rotation.set(0, rot, 0); dummy.scale.set(1, 1, 1); dummy.updateMatrix();
+    benchMesh.setMatrixAt(k, dummy.matrix);
+  });
+  dummy.rotation.set(0, 0, 0);
+  bins.forEach(([x, z], k) => { dummy.position.set(x, 0, z); dummy.updateMatrix(); binMesh.setMatrixAt(k, dummy.matrix); });
+  hydrants.forEach(([x, z], k) => { dummy.position.set(x, 0, z); dummy.updateMatrix(); hydMesh.setMatrixAt(k, dummy.matrix); });
+  benchMesh.castShadow = binMesh.castShadow = hydMesh.castShadow = true;
+  city.add(benchMesh, binMesh, hydMesh);
+}
+
 // ----- Construction de toute la ville -----
 export function buildCity() {
   // Sol en relief (collines et montagnes autour de la ville) et routes
   scene.add(buildTerrain(groundMat, LIMIT));
   asphaltTex.repeat.set(CITY / 8, CITY / 8);
-  const road = new THREE.Mesh(new THREE.PlaneGeometry(CITY, CITY), new THREE.MeshStandardMaterial({ map: asphaltTex, roughness: 0.92 }));
+  const road = new THREE.Mesh(new THREE.PlaneGeometry(CITY, CITY), new THREE.MeshStandardMaterial({ map: asphaltTex, bumpMap: asphaltTex, bumpScale: 1, roughness: 0.92 }));
   road.rotation.x = -Math.PI / 2; road.receiveShadow = true;
   city.add(road);
 
@@ -285,11 +351,12 @@ export function buildCity() {
   }
 
   // Maisons (instanciées = rapide)
-  const houseMat = new THREE.MeshStandardMaterial({ map: houseTex, emissiveMap: houseEm, emissive: 0xffffff, emissiveIntensity: 0, roughness: 0.9 });
+  const houseMat = new THREE.MeshStandardMaterial({ map: houseTex, bumpMap: houseTex, bumpScale: 1, emissiveMap: houseEm, emissive: 0xffffff, emissiveIntensity: 0, roughness: 0.9 });
   windowMats.push(houseMat);
   const roofGeo = new THREE.ConeGeometry(1, 1, 4); roofGeo.rotateY(Math.PI / 4);
+  roofTileTex.repeat.set(4, 2);
   const walls = new THREE.InstancedMesh(unitBox, houseMat, houses.length);
-  const roofs = new THREE.InstancedMesh(roofGeo, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.8, flatShading: true }), houses.length);
+  const roofs = new THREE.InstancedMesh(roofGeo, new THREE.MeshStandardMaterial({ color: 0xffffff, map: roofTileTex, bumpMap: roofTileTex, bumpScale: 1.5, roughness: 0.8, flatShading: true }), houses.length);
   const col = new THREE.Color();
   houses.forEach((h, k) => {
     dummy.position.set(h.x, h.h / 2, h.z); dummy.rotation.set(0, h.rot, 0); dummy.scale.set(h.w, h.h, h.d); dummy.updateMatrix();
@@ -375,6 +442,9 @@ export function buildCity() {
     addCoin(x, 1.6, z);
     placed++;
   }
+
+  // Bancs, poubelles et bouches d'incendie sur les trottoirs
+  addStreetFurniture();
 }
 
 // ----- Hauteur du sol -----
