@@ -1,6 +1,6 @@
 // =====================================================
 //  DONNÉES DU JEU : voitures, armes, couleurs, police...
-//  ➜ Pour ajouter une voiture ou une arme, c'est ICI !
+//  -> Pour ajouter une voiture ou une arme, c'est ICI !
 // =====================================================
 
 // style = forme de la voiture (CAR_SHAPES dans vehicles/models.js
@@ -23,17 +23,18 @@ export const STOLEN_CAR = { name: 'Voiture volée', style: 'gt', maxSpeed: 42, a
 // voiture de police (on peut la voler... mais ça énerve la police !)
 export const POLICE_CAR = { name: 'Voiture de police', style: 'police', maxSpeed: 58, accel: 22, turn: 2.25, drift: 1.0, hp: 140 };
 export const STAT_NAMES = ['Vitesse', 'Accélération', 'Maniabilité', 'Drift'];
-// couleurs de peinture « bonbon » 🍬
+// couleurs de peinture « bonbon »
 export const COLORS = ['#ff5c8a', '#ff9f43', '#ffd93d', '#4dd8c0', '#5aa9ff', '#a77bff', '#ff7ad9', '#ffffff', '#3b3b58', '#8be04e'];
 
 // Armes : rate = temps entre 2 tirs (s), dmg = dégâts, range = portée (m)
 // pellets = nombre de plombs, spread = dispersion, force = recul donné aux piétons
+// fa = icône Font Awesome affichée dans le HUD (https://fontawesome.com/icons)
 export const WEAPONS = [
-  { id: 'fist', name: 'Poings', icon: '👊', rate: 0.45, range: 2.4, dmg: 8, melee: true, force: 6 },
-  { id: 'pistol', name: 'Pistolet', icon: '🔫', rate: 0.28, range: 90, dmg: 20, spread: 0.01, force: 5 },
-  { id: 'smg', name: 'Mitraillette', icon: '💥', rate: 0.09, range: 70, dmg: 9, spread: 0.045, auto: true, force: 3 },
-  { id: 'shotgun', name: 'Fusil à pompe', icon: '🎯', rate: 0.85, range: 30, dmg: 9, pellets: 7, spread: 0.11, force: 4 },
-  { id: 'rocket', name: 'Lance-roquettes', icon: '🚀', rate: 1.1, range: 220, rocket: true, force: 0 },
+  { id: 'fist', name: 'Poings', icon: '', fa: 'fa-hand-fist', rate: 0.45, range: 2.4, dmg: 8, melee: true, force: 6 },
+  { id: 'pistol', name: 'Pistolet', icon: '', fa: 'fa-gun', rate: 0.28, range: 90, dmg: 20, spread: 0.01, force: 5 },
+  { id: 'smg', name: 'Mitraillette', icon: '', fa: 'fa-burst', rate: 0.09, range: 70, dmg: 9, spread: 0.045, auto: true, force: 3 },
+  { id: 'shotgun', name: 'Fusil à pompe', icon: '', fa: 'fa-crosshairs', rate: 0.85, range: 30, dmg: 9, pellets: 7, spread: 0.11, force: 4 },
+  { id: 'rocket', name: 'Lance-roquettes', icon: '', fa: 'fa-rocket', rate: 1.1, range: 220, rocket: true, force: 0 },
 ];
 
 // Police : points de recherche nécessaires pour 1 à 5 étoiles
@@ -44,7 +45,7 @@ export const POLICE = {
   copDamage: 5,                        // dégâts d'un tir de policier
 };
 
-export const TIMES = [{ id: 'day', name: '☀️ Jour' }, { id: 'sunset', name: '🌇 Soir' }, { id: 'night', name: '🌙 Nuit' }];
+export const TIMES = [{ id: 'day', name: 'Jour' }, { id: 'sunset', name: 'Soir' }, { id: 'night', name: 'Nuit' }];
 export const TRAFFIC = [{ id: 0, name: 'Aucune' }, { id: 1, name: 'Normale' }, { id: 2, name: 'Beaucoup' }];
 export const TRAFFIC_COUNT = [0, 34, 64];
 export const ASSISTS = [{ id: 'strong', name: 'Forte' }, { id: 'normal', name: 'Normale' }, { id: 'pro', name: 'Pro (x1,5)' }];
