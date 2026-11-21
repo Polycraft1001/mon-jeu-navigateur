@@ -1,5 +1,6 @@
 // =====================================================
 //  MENU PRINCIPAL, PAUSE, nouvelle partie
+//  (aucun emoji : les icônes viennent de Font Awesome)
 // =====================================================
 import { $, isMobile } from '../core/utils.js';
 import { G } from '../core/ctx.js';
@@ -15,10 +16,11 @@ import { resetWeapons } from '../gameplay/weapons.js';
 import { resetDestruction } from '../fx/destruction.js';
 import { resetCoins } from '../gameplay/coins.js';
 import { mission, cancelMission } from '../gameplay/mission.js';
-import { refreshStats, showHint } from './hud.js';
+import { refreshStats, showHint, icon } from './hud.js';
 import { clearInput } from './input.js';
 
 const ferrariReady = () => (typeof hasFerrari === 'function' ? hasFerrari() : !!hasFerrari);
+const fmt = (n) => (n || 0).toLocaleString('fr-FR');
 
 // ----- Plein écran + mode paysage (téléphone) -----
 function goFullscreen() {
@@ -72,13 +74,17 @@ export function buildMenu() {
     const s = document.createElement('div');
     s.className = 'swatch' + (i === save.color ? ' selected' : '');
     s.style.background = col;
+    s.title = col;
     s.onclick = () => { save.color = i; persist(); if (G.car && G.car.paint) G.car.paint.color.set(col); buildMenu(); };
     cl.appendChild(s);
   });
   makeChoices('timeChoices', TIMES, 'time', () => applyTime(save.time));
   makeChoices('trafficChoices', TRAFFIC, 'traffic', spawnTraffic);
   makeChoices('assistChoices', ASSISTS, 'assist');
-  $('records').innerHTML = '🏆 Record de drift : <b>' + save.bestDrift.toLocaleString('fr-FR') + '</b> pts &nbsp;·&nbsp; ⭐ Missions réussies : <b>' + save.missions + '</b> &nbsp;·&nbsp; 💰 Argent : <b>' + save.money.toLocaleString('fr-FR') + ' $</b>';
+  $('records').innerHTML =
+    '<span>' + icon('fa-trophy') + 'Record de drift : <b>' + fmt(save.bestDrift) + '</b> pts</span>' +
+    '<span>' + icon('fa-star') + 'Missions réussies : <b>' + fmt(save.missions) + '</b></span>' +
+    '<span>' + icon('fa-sack-dollar') + 'Argent : <b>' + fmt(save.money) + ' $</b></span>';
 }
 
 // ----- Remet le monde à neuf (nouvelle partie / retour au menu) -----
@@ -96,6 +102,15 @@ function newRound() {
   D.mult = 1; D.combo = 0; D.show = 0;
 }
 
+const HINT_MOBILE =
+  'Joystick = tourner · ' + icon('fa-caret-up') + ' ' + icon('fa-caret-down') + ' · DRIFT · ' +
+  icon('fa-door-open') + ' sortir / monter / voler · ' + icon('fa-crosshairs') + ' tirer · ' +
+  icon('fa-rotate') + ' arme · ' + icon('fa-arrow-rotate-left') + ' replacer · ' + icon('fa-star') + ' = mission';
+const HINT_DESKTOP =
+  '<kbd>Flèches</kbd>/<kbd>ZQSD</kbd> conduire · <kbd>Espace</kbd> drift · <kbd>F</kbd> sortir / monter / voler · ' +
+  '<kbd>Clic</kbd>/<kbd>X</kbd> tirer · <kbd>1-5</kbd> armes · <kbd>R</kbd> replacer · <kbd>H</kbd> klaxon · ' +
+  icon('fa-star') + ' = mission';
+
 export function startGame() {
   goFullscreen();
   G.state = 'play';
@@ -105,9 +120,7 @@ export function startGame() {
   if (isMobile) $('touch').classList.remove('hidden');
   newRound();
   camera.position.set(player.pos.x, 4, player.pos.z + 9);
-  showHint(isMobile
-    ? 'Joystick = tourner · ▲ ▼ · DRIFT · 🚪 sortir / monter / voler · 🔫 tirer · 🔄 arme · ↺ replacer / appeler ta voiture · Marqueur ⭐ = mission'
-    : 'Flèches/ZQSD = conduire · Espace = drift · <b>F</b> = sortir / monter / voler 🚪 · <b>Clic</b> ou <b>X</b> = tirer 🔫 · <b>1-5</b> / molette = armes · R = replacer · H = klaxon · Marqueur ⭐ = mission');
+  showHint(isMobile ? HINT_MOBILE : HINT_DESKTOP);
   refreshStats();
   checkRotate();
   if (G.clock) G.clock.getDelta();
