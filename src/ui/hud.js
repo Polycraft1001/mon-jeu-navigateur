@@ -15,6 +15,11 @@ const cache = {};
 const get = (id) => cache[id] || (cache[id] = $(id));
 let msgTimer = 0, hintTimer = 0, driftBtn = null, lastWeapon = null;
 
+// compteur circulaire : arc de 270° sur un cercle de rayon 84 (voir index.html)
+const GAUGE_CIRC = 2 * Math.PI * 84;  // tour complet
+const GAUGE_ARC = GAUGE_CIRC * 0.75;  // partie visible
+let lastGauge = -1;
+
 // petit utilitaire : un texte sûr à mettre dans innerHTML
 function esc(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -49,12 +54,26 @@ export function refreshStats() {
   get('bestDrift').textContent = save.bestDrift.toLocaleString('fr-FR');
 }
 
-const hpColor = (k) => (k > 0.5 ? '#3dff7a' : k > 0.25 ? '#ffd23a' : '#ff4040');
+const hpColor = (k) => (k > 0.5 ? 'linear-gradient(90deg, #2fcf72, #b6f36b)' : k > 0.25 ? 'linear-gradient(90deg, #ffb52e, #ffe066)' : 'linear-gradient(90deg, #ff2f4f, #ff6a5c)');
 function bar(id, k) {
   const el = get(id);
   if (!el) return;
   el.style.width = (k * 100).toFixed(1) + '%';
   el.style.background = hpColor(k);
+  el.parentNode.classList.toggle('low', k > 0 && k <= 0.25);
+}
+
+// compteur de vitesse circulaire (l'arc se remplit, rouge près de la vitesse max)
+function updateGauge(kmh, maxKmh) {
+  const arc = get('gaugeArc');
+  if (!arc) return;
+  const k = clamp(kmh / maxKmh, 0, 1);
+  const len = Math.round(k * GAUGE_ARC);
+  if (len === lastGauge) return;
+  lastGauge = len;
+  arc.style.strokeDasharray = len + ' ' + GAUGE_CIRC.toFixed(2);
+  arc.style.opacity = len < 1 ? 0 : 1;
+  get('speedBox').classList.toggle('redline', k > 0.9);
 }
 
 // arme en main : icône + nom (avec une petite animation quand on change)
@@ -87,7 +106,10 @@ function updateActionHint(inCar) {
 export function updateHUD(dt) {
   const inCar = G.mode === 'car';
   document.body.classList.toggle('onfoot', !inCar);
-  get('speed').textContent = Math.round(Math.abs(inCar ? player.speed : hero.speed) * 3.6);
+  const kmh = Math.abs(inCar ? player.speed : hero.speed) * 3.6;
+  get('speed').textContent = Math.round(kmh);
+  const maxKmh = inCar ? ((player.def && player.def.maxSpeed) || 50) * 3.6 * 1.2 : 40;
+  updateGauge(kmh, maxKmh);
 
   // barre de turbo
   const A = ASSIST[save.assist] || ASSIST.normal;

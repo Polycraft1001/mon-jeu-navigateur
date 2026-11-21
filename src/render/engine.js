@@ -6,6 +6,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { $, rr, isMobile } from '../core/utils.js';
 import { G } from '../core/ctx.js';
@@ -24,14 +25,48 @@ export const scene = new THREE.Scene();
 scene.fog = new THREE.Fog(0xcddff0, 200, 1400);
 export const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.3, 3000);
 
+// ----- Étalonnage des couleurs (comme au cinéma) : saturation, contraste, teinte -----
+// + un très léger « bruit » qui supprime les bandes visibles dans les dégradés du ciel
+const GradeShader = {
+  uniforms: {
+    tDiffuse: { value: null },
+    saturation: { value: 1.08 },
+    contrast: { value: 1.04 },
+    tint: { value: new THREE.Vector3(1, 1, 1) },
+  },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  fragmentShader: `
+uniform sampler2D tDiffuse; uniform float saturation; uniform float contrast; uniform vec3 tint;
+varying vec2 vUv;
+void main(){
+  vec4 c = texture2D(tDiffuse, vUv);
+  vec3 col = c.rgb;
+  float l = dot(col, vec3(0.2126, 0.7152, 0.0722));
+  col = mix(vec3(l), col, saturation);
+  col = (col - 0.5) * contrast + 0.5;
+  col *= tint;
+  col += (fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) - 0.5) / 255.0;
+  gl_FragColor = vec4(clamp(col, 0.0, 1.0), c.a);
+}`,
+};
+
 export let composer = null;
 export let bloom = null;
+export let grade = null;
 if (!isMobile) {
-  composer = new EffectComposer(renderer);
+  // Rendu avec anticrénelage MSAA : sans ça, le bloom rendait les bords en escalier
+  const pr = renderer.getPixelRatio();
+  const rt = new THREE.WebGLRenderTarget(window.innerWidth * pr, window.innerHeight * pr, {
+    type: THREE.HalfFloatType,
+    samples: renderer.capabilities.isWebGL2 ? 4 : 0,
+  });
+  composer = new EffectComposer(renderer, rt);
   composer.addPass(new RenderPass(scene, camera));
   bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.3, 0.4, 0.9);
   composer.addPass(bloom);
   composer.addPass(new OutputPass());
+  grade = new ShaderPass(GradeShader);
+  composer.addPass(grade);
 }
 export function render() {
   if (composer) composer.render(); else renderer.render(scene, camera);
@@ -92,14 +127,38 @@ sun.shadow.normalBias = 0.05;
 scene.add(sun, sun.target);
 export const sunOffset = new THREE.Vector3(90, 160, 60);
 
-// ----- Ciel -----
-export const skyUniforms = { top: { value: new THREE.Color() }, bottom: { value: new THREE.Color() } };
+// ----- Ciel : dégradé + bande lumineuse à l'horizon + disque du soleil (ou de la lune) -----
+// Les couleurs sont réglées par world/time.js selon le moment de la journée
+export const skyUniforms = {
+  top: { value: new THREE.Color() },
+  bottom: { value: new THREE.Color() },
+  horizon: { value: new THREE.Color(0xffffff) },
+  sunDir: { value: new THREE.Vector3(0.45, 0.8, 0.3).normalize() },
+  sunColor: { value: new THREE.Color(0xffffff) },
+  sunSize: { value: 0.9994 },
+  glow: { value: 0.6 },
+};
 export const sky = new THREE.Mesh(
-  new THREE.SphereGeometry(1500, 32, 16),
+  new THREE.SphereGeometry(1500, 48, 24),
   new THREE.ShaderMaterial({
     uniforms: skyUniforms, side: THREE.BackSide, depthWrite: false, fog: false,
     vertexShader: 'varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-    fragmentShader: 'uniform vec3 top; uniform vec3 bottom; varying vec3 vP; void main(){ float h = clamp(vP.y * 1.6 + 0.1, 0.0, 1.0); gl_FragColor = vec4(mix(bottom, top, h), 1.0);\n#include <colorspace_fragment>\n}',
+    fragmentShader: `
+uniform vec3 top; uniform vec3 bottom; uniform vec3 horizon;
+uniform vec3 sunDir; uniform vec3 sunColor; uniform float sunSize; uniform float glow;
+varying vec3 vP;
+void main(){
+  vec3 d = normalize(vP);
+  float t = clamp(d.y * 1.5 + 0.08, 0.0, 1.0);
+  vec3 col = mix(bottom, top, pow(t, 0.75));
+  col = mix(col, horizon, exp(-abs(d.y - 0.02) * 10.0) * 0.6);
+  float s = max(dot(d, sunDir), 0.0);
+  col += sunColor * (pow(s, 6.0) * 0.25 + pow(s, 60.0) * 0.5) * glow;
+  col += sunColor * smoothstep(sunSize - 0.0004, sunSize, s) * 2.0;
+  col += (fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) - 0.5) / 255.0;
+  gl_FragColor = vec4(col, 1.0);
+  #include <colorspace_fragment>
+}`,
   })
 );
 sky.renderOrder = -1;
@@ -117,10 +176,11 @@ const starGeo = new THREE.BufferGeometry();
 export const stars = new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xffffff, size: 2, sizeAttenuation: false, fog: false }));
 scene.add(stars);
 
+// Nuages : boules plus rondes (plus de facettes) pour un rendu plus doux
 export const clouds = new THREE.Group();
 export const cloudMat = new THREE.MeshLambertMaterial({ color: 0xffffff, fog: false });
 {
-  const cg = new THREE.IcosahedronGeometry(1, 1);
+  const cg = new THREE.IcosahedronGeometry(1, 2);
   for (let i = 0; i < 25; i++) {
     const c = new THREE.Group();
     for (let j = 0; j < 5; j++) {
