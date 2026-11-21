@@ -16,10 +16,14 @@ const get = (id) => cache[id] || (cache[id] = $(id));
 let msgTimer = 0, hintTimer = 0, driftBtn = null, lastWeapon = null;
 
 // petit utilitaire : un texte sûr à mettre dans innerHTML
-const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
-const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ESC[c]);
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
 // une icône Font Awesome, ex. icon('fa-gun')
-export const icon = (fa) => (fa ? '<i class="fa-solid ' + fa + '"></i>' : '');
+// (fonction déclarée : utilisable même avec des imports circulaires)
+export function icon(fa) {
+  return fa ? '<i class="fa-solid ' + fa + '"></i>' : '';
+}
 
 // Grand message au milieu de l'écran
 export function showMessage(text, color = '#fff', time = 1.6) {
