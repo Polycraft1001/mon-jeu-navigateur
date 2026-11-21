@@ -39,6 +39,8 @@
 </head>
 <body>
   <div id="game"></div>
+  <!-- bords de l'écran légèrement assombris (effet caméra) -->
+  <div id="vignette"></div>
 
   <!-- ===== HUD (pendant le jeu) ===== -->
   <div id="hud" class="hidden">
@@ -79,9 +81,23 @@
 
     <canvas id="minimap" width="200" height="200"></canvas>
 
+    <!-- compteur de vitesse circulaire (l'arc est rempli par src/ui/hud.js) -->
     <div id="speedBox">
-      <div id="speed">0</div>
-      <div class="unit">km/h</div>
+      <svg id="gauge" viewBox="0 0 200 200" aria-hidden="true">
+        <defs>
+          <linearGradient id="gaugeGrad" x1="0" y1="1" x2="1" y2="0">
+            <stop offset="0" stop-color="#4fc3ff"/>
+            <stop offset="0.6" stop-color="#ffd23a"/>
+            <stop offset="1" stop-color="#ff4d5e"/>
+          </linearGradient>
+        </defs>
+        <circle class="gTrack" cx="100" cy="100" r="84" transform="rotate(135 100 100)"/>
+        <circle id="gaugeArc" class="gArc" cx="100" cy="100" r="84" transform="rotate(135 100 100)"/>
+      </svg>
+      <div class="gCenter">
+        <div id="speed">0</div>
+        <div class="unit">km/h</div>
+      </div>
       <div id="turboBar"><div id="turboFill"></div></div>
     </div>
 
@@ -118,6 +134,7 @@
   <!-- ===== MENU PRINCIPAL ===== -->
   <div id="menu" class="overlay">
     <div class="menuBox">
+      <div class="logo"><span><i class="fa-solid fa-flag-checkered"></i> MONDE OUVERT</span></div>
       <h1>TURBO <span>CITY</span> 3D</h1>
       <p class="subtitle">Une grande ville ouverte : conduis, drifte, sors de ta voiture, vole celle des autres, ramasse les pièces, fais des missions… et démolis tout !</p>
 
